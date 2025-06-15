@@ -1,0 +1,288 @@
+{{- range $i, $instance := .Values.instance }}
+{{- if or $instance.enabled (not (hasKey $instance "enabled")) }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
+  labels:
+    app: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
+spec:
+  serviceName: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}-headless-svc
+  replicas: {{ $instance.replicaCount | default "1"}}
+  selector:
+    matchLabels:
+      app: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configMap.yaml") (dict "Capabilities" $.Capabilities "Chart" $.Chart "Files" $.Files "Release" $.Release "Template" $.Template "Values" (dict "instance" (list $instance))) | sha256sum }}
+        {{- if $instance.template }}
+          {{- range $i, $item := $instance.template.annotations }}
+          {{- toYaml $item | nindent 8 }}
+          {{- end }}
+        {{- end }}
+      labels:
+        app: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
+        {{- if $instance.template }}
+          {{- range $i, $item := $instance.template.labels }}
+          {{- toYaml $item | nindent 8 }}
+          {{- end }}
+        {{- end }}
+        
+    spec:
+    {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- if $instance.affinity }}
+      affinity:
+        {{- toYaml $instance.affinity | nindent 8 }}
+    {{- end }}
+
+      securityContext:
+        fsGroup: {{ ($instance.securityContext).fsGroup | default "2030" }}
+        {{- if ($instance.securityContext).fsGroupChangePolicy }}
+        fsGroupChangePolicy: {{ ($instance.securityContext).fsGroupChangePolicy | default "OnRootMismatch" }}
+        {{- end }}
+
+      initContainers:
+        - name: ensure-persistent-volume-sync-with-image-data
+          image: "{{$instance.image.name}}:{{$instance.image.tag}}"
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh","-c"]
+          args:
+            - cp -Rn /opt/eccosp-artemis/etc/* /tmp/eccosp-artemis-dir/;
+          volumeMounts:
+          - name: data
+            mountPath: "/tmp/eccosp-artemis-dir"
+        - name: pgsql-data-permission-fix-and-livenessprobe-script
+          image: "{{ $.Values.global.imageBusybox.name }}"
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh","-c"]
+          args:
+            - /bin/chmod 777 -R /data;
+              chown {{ ($instance.securityContext).runAsUser | default "2030" }}:{{ ($instance.securityContext).runAsGroup | default "2030" }} -R /data;
+              {{- if $instance.keepLogsAfterRestart}}
+              /bin/chmod 777 -R /logs;
+              chown {{ ($instance.securityContext).runAsUser | default "2030" }}:{{ ($instance.securityContext).runAsGroup | default "2030" }} -R /logs;
+              {{- end }}
+
+          volumeMounts:
+          - name: data
+            mountPath: /data
+          {{- if $instance.keepLogsAfterRestart}}
+          - name: logs
+            mountPath: /logs
+          {{- end }}
+       {{- if gt (int $instance.replicaCount) 1}}
+        - name: artemis-ha-configuration-update
+          image: "{{ $.Values.global.imageBusybox.name }}"
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/tmp/configure-cluster.sh"]
+          volumeMounts:
+          - name: config
+            subPath: configure-cluster.sh
+            mountPath: /tmp/configure-cluster.sh
+          - name: config
+            subPath: broker-master.xml
+            mountPath: /tmp/broker-master.xml
+          - name: config
+            subPath: broker-slave.xml
+            mountPath: /tmp/broker-slave.xml
+          - name: data
+            mountPath: /opt/eccosp-artemis/etc/
+        {{- end }}
+      {{- range $i, $item := $instance.initContainers }}
+        - {{- toYaml $item | nindent 10 }}
+      {{- end }}
+      containers:
+        - name: {{$.Release.Name}}
+          image: "{{ $instance.image.name }}:{{ $instance.image.tag }}"
+          {{- if $instance.command }}
+          command: {{- toYaml $instance.command | nindent 10 }}
+          args: {{- toYaml $instance.args | nindent 10 }}
+          {{- end }}
+          {{- if $instance.image.registry }}
+          registry: {{ $instance.image.registry }}
+          {{- end }}
+          imagePullPolicy: {{ $instance.image.pullPolicy | default "IfNotPresent" }}
+          {{- if $instance.readinessProbe}}
+          readinessProbe:
+            tcpSocket:
+              port: {{ (($instance.service).amqps).port | default (($instance.service).amqp).port | default 5671 }}
+            initialDelaySeconds: 120
+            periodSeconds: 60
+          {{- end }}
+          {{- if $instance.livenessProbe}}
+          # Liveness probes rules
+          livenessProbe:
+            tcpSocket:
+              port: {{ (($instance.service).https).port | default (($instance.service).http).port }}
+            initialDelaySeconds: 120
+            periodSeconds: 60
+          {{- end }}
+          securityContext:
+            runAsUser: {{ ($instance.securityContext).runAsUser | default "2030" }}
+            runAsGroup: {{ ($instance.securityContext).runAsGroup | default "2030" }}
+          {{- if $instance.command }}
+          command: {{- toYaml $instance.command | nindent 10 }}
+          {{- end }}
+          {{- if $instance.args }}
+          args: {{- toYaml $instance.args | nindent 10 }}
+          {{- end }}
+          ports:
+          {{- if ($instance.service).http }}
+            - name: http
+              containerPort: {{$instance.service.http.port | default "8161" }}
+              protocol: TCP
+          {{- end }}
+          {{- if ($instance.service).https }}
+            - name: https
+              containerPort: {{$instance.service.https.port | default "8162" }}
+              protocol: TCP
+          {{- end }}
+            - name: amqps
+              containerPort: {{ (($instance.service).amqps).port | default "5672" }}
+              protocol: TCP
+
+          volumeMounts:
+            - name: config
+              subPath: artemis-users.properties
+              mountPath: /opt/eccosp-artemis/etc/artemis-users.properties
+            - name: config
+              subPath: artemis-roles.properties
+              mountPath: /opt/eccosp-artemis/etc/artemis-roles.properties
+            - name: config
+              subPath: artemis.profile
+              mountPath: /opt/eccosp-artemis/etc/artemis.profile
+            - name: config
+              subPath: log4j2.properties
+              mountPath: /opt/eccosp-artemis/etc/log4j2.properties
+            - name: config
+              subPath: jolokia-access.xml
+              mountPath: /opt/eccosp-artemis/etc/jolokia-access.xml
+            {{- if or ($instance.service).http ($instance.service).https }}
+            - name: config
+              subPath: bootstrap.xml
+              mountPath: /opt/eccosp-artemis/etc/bootstrap.xml
+            {{- end }}
+            {{- if gt (int $instance.replicaCount) 1}}
+            - name: config
+              subPath: broker-master.xml
+              mountPath: /tmp/broker-master.xml
+            - name: config
+              subPath: broker-slave.xml
+              mountPath: /tmp/broker-slave.xml
+            {{ else }}
+            - name: config
+              subPath: broker.xml
+              mountPath: /opt/eccosp-artemis/etc/broker.xml
+            {{- end }}
+            - name: journal
+              mountPath: /opt/eccosp-artemis/data/
+            - name: data
+              mountPath: /opt/eccosp-artemis/etc/
+            {{- if $instance.keepLogsAfterRestart}}
+            - name: logs
+              mountPath: /opt/eccosp-artemis/log
+            {{- end }}
+            {{- range $i, $item := $instance.volumeMounts }}
+            - {{- toYaml $item | nindent 14 }}
+            {{- end }}
+         {{- if $instance.resourcesK8s}}
+          resources:
+            requests:
+              cpu: {{$instance.resourcesK8s.requests.cpu}} # Minimum CPU allocation for pod
+              ephemeral-storage: {{$instance.resourcesK8s.requests.ephemeralStorage | default "256Mi" }} # Minimum ephemeral storage allocation for pod
+              memory: {{$instance.resourcesK8s.requests.memory}} # Minimum memory allocation for pod
+            limits:
+              cpu: {{$instance.resourcesK8s.limits.cpu}} # Maximum CPU limit for pod
+              memory: {{$instance.resourcesK8s.limits.memory}} # Maximum memory limit for pod
+          {{- end }}
+      {{- range $i, $item := $instance.containers }}
+        - {{- toYaml $item | nindent 10 }}
+      {{- end }}
+
+      volumes:
+        - name: config
+          configMap:
+            name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-cm
+        {{- range $i, $item := $instance.volumes }}
+        - {{- toYaml $item | nindent 10 }}
+        {{- end }}
+        {{- if $instance.useSharedStorageForConfiguration }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: shared-storage-eccosp-artemis-{{$instance.name}}-claim
+        {{- end }}
+        - name: etc
+          emptyDir: {}
+        {{- if $instance.useSharedStorageForJournal }}
+        - name: journal
+          persistentVolumeClaim:
+            claimName: shared-storage-eccosp-artemis-journal-{{$instance.name}}-claim
+        {{- end }}
+  volumeClaimTemplates:
+  {{- if not ($instance.useSharedStorageForConfiguration) }}
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{$.Values.global.storage.class}}
+      resources:
+        requests:
+          storage: {{$instance.storageData | default "2Gi"}}
+  {{- end }}
+  {{- if not ($instance.useSharedStorageForJournal) }}
+  - metadata:
+      name: journal
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{$.Values.global.storage.class}}
+      resources:
+        requests:
+          storage: {{$instance.storageData | default "1Gi"}}
+   {{- end }}
+
+  {{- if $instance.keepLogsAfterRestart}}
+  - metadata:
+      name: logs
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{$.Values.global.storage.class}}
+      resources:
+        requests:
+          storage: {{$instance.storageLogs | default "512Mi"}}
+   {{- end }}
+
+{{- if $instance.useSharedStorageForConfiguration }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-storage-eccosp-artemis-{{$instance.name}}-claim
+spec:
+  storageClassName: {{ $instance.sharedStorageClass }}
+  accessModes:
+    - {{ $instance.sharedStorageAccessMode | default "ReadWriteMany" }}
+  resources:
+    requests:
+      storage: {{ $instance.sharedStorageSize }}
+{{ end }}
+{{- if $instance.useSharedStorageForJournal }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-storage-eccosp-artemis-journal-{{$instance.name}}-claim
+spec:
+  storageClassName: {{ $instance.sharedStorageClassJournal }}
+  accessModes:
+    - {{ $instance.sharedStorageAccessMode | default "ReadWriteMany" }}
+  resources:
+    requests:
+      storage: {{ $instance.sharedStorageSizeJournal }}
+{{ end }}
+---
+{{- end }}
+{{ end }}

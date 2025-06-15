@@ -1,0 +1,97 @@
+# The commented parameters have default values but these defaults can be overridden when enabled
+# All available configuration parameters are described in values file values-ecp-endpoint-ep1.yaml
+
+ecp-endpoint:
+  enabled: true
+  instance:
+    - name: ep2
+      image:
+        name: entsoe/ecp-endpoint
+        tag: 4.16.0
+      replicaCount: 1
+      resourcesK8s:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 1512Mi
+      storageData: 1Gi
+      storageLogs: 256Mi
+      keepLogsAfterRestart: true
+      livenessProbe: false
+      readinessProbe: true
+
+      service:
+        https:
+          port: 8443
+      ingress:
+        enabled: false
+#        apiVersion: networking.k8s.io/v1
+#        contextPath: / # context path for ingress, default value '/'
+#        host: ecp-endpoint.ep2.eccosp
+#        tls: # section for TLS definition for HTTPS connection to ingress
+#          secretName: tls-secret  # secret where TLS certificate is stored
+#        annotations:
+#          kubernetes.io/ingress.class: nginx
+#          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+#          nginx.ingress.kubernetes.io/ssl-passthrough: 'true'
+
+      ecpProperties:
+        springProfilesActive: ecp-nonha, console-logging
+        dataDirectory: /var/lib/ecp-endpoint
+        ecpKeystoreLocation: /var/lib/ecp-endpoint/keystore.jks
+        ecpKeystorePassword: password
+        ecpAuthKeystoreLocation: /var/lib/ecp-endpoint/authKeystore.jks
+        ecpAuthKeystorePassword: password
+
+        internalBrokerHost: eccosp-eccosp-artemis-artemis-eptb2-svc
+        internalBrokerAmqpPort: 5672
+        internalBrokerUseAuthentication: true
+        internalBrokerAuthUser: endpoint
+        internalBrokerAuthPassword: password
+        internalBrokerKeystoreLocation: ${dataDirectory}/authKeystore.jks
+        internalBrokerKeystorePassword: password
+        internalBrokerKeystoreAuthAlias: ecp_module_auth
+        internalBrokerUrls: amqps://eccosp-eccosp-artemis-artemis-eptb2-svc:5672
+
+        loggingFileName: /var/log/ecp-endpoint/ecp.log
+        loggingFilePath: /var/log/ecp-endpoint
+        loggingConfig: /etc/ecp-endpoint/ecp-logback.xml
+        loggingLevelOrgApacheQpid: WARN
+
+        springJmxEnabled: false
+        serverErrorWhiteLabelEnabled: true
+
+        ecpDBKeystorePassword: password
+
+        ecpEndpointAmqpApiEnabled: true
+        ecpEndpointAmqpApiSendHandlerEnabled: true
+        sendHandlerBeanName: amqpApiSendHandler
+        sendHandlertypeName: "*"
+
+        ecpNatEnabled: false
+
+        ecpSecurityProxyEnabled: false
+        ecpCsrfSecret: P9CkNis9r5Pn00RFZwN9oZgi
+
+      envConf:
+        resourcesJvm:
+          xms: 128M
+          xmx: 1G
+
+      ecpUsersProperties:
+        ecpEndpointUsers:
+          - login: admin
+            password: password
+            role: admin
+          - login: tester
+            password: passwordtester
+            role: user
+
+# global config
+global:
+  storage:
+    class: standard
+  imagePullSecrets:
+    - name: regcred

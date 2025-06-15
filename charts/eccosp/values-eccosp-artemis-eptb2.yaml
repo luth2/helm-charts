@@ -1,0 +1,68 @@
+# The commented parameters have default values but these defaults can be overridden when enabled
+# All available configuration parameters are described in values file values-eccosp-artemis-eptb1.yaml
+
+# config for eccosp-artemis
+eccosp-artemis:
+  enabled: true
+  instance:
+    - name: artemis-eptb2
+      image:
+        name: entsoe/eccosp-artemis
+        tag: 4.16.0
+#        pullPolicy: IfNotPresent
+      replicaCount: 1
+      resourcesK8s:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 5Gi
+
+      storageData: 1Gi
+      storageLogs: 256Mi
+      sharedStorageSize: 100Mi
+      sharedStorageSizeJournal: 100Mi
+      sharedStorageClass: nfs-client
+      sharedStorageClassJournal: nfs-client
+      keepLogsAfterRestart: true
+      livenessProbe: false
+      readinessProbe: true
+      useSharedStorageForConfiguration: true
+      useSharedStorageForJournal: true
+      prometheusEnabled: true
+
+      artemisKeystoreLocation: /opt/eccosp-artemis/etc/keystore.jks
+      artemisKeystorePassword: password
+
+      service:
+        type: LoadBalancer
+        https:
+          port: 8161
+        amqps:
+          port: 5672
+      ingress:
+        enabled: false
+      brokerXml:
+        default:
+          ecpComponentCode: artemis-eptb2
+
+        addressSettings:
+          defaultConfigurationEnabled: true
+      env:
+        resourcesJvm:
+          xms: 128M
+          xmx: 4G
+
+      artemisUsers:
+        - login: endpoint
+          password: password
+        - login: toolbox
+          password: password
+
+
+global:
+  storage:
+    class: standard
+  imagePullSecrets:
+    - name: regcred

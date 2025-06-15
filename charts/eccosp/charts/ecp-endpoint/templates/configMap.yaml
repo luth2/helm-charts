@@ -1,0 +1,708 @@
+{{- range $i, $instance := .Values.instance }}
+{{- $version := "4.12.0" -}}
+{{- if regexMatch "^[0-9]+\\.?[0-9]+\\.?[0-9]+\\.?.*" ($instance.image).tag -}}
+{{ $version = regexReplaceAll "^([0-9]+\\.?)([0-9]+\\.?)([0-9]+)\\.?(.*)" ($instance.image).tag "${1}${2}${3}" -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Release.Namespace }}-{{ $.Chart.Name }}-{{ $instance.name }}-cm
+  labels:
+    backup.component.name: {{ $.Release.Name }}
+data:
+  ecp.properties: |-
+    # Defines persistent strategy for ECP
+    # Available options:
+    #  ecp-ha       high availability mode with external db
+    #  ecp-nonha    for persistent store inside dataDirectory
+    spring.profiles.active={{ $instance.ecpProperties.springProfilesActive | default "ecp-nonha" }}
+    ecp.description={{ $instance.ecpProperties.description | default "ECP Endpoint" }}
+
+    # Directory for persistent data
+    dataDirectory={{ $instance.ecpProperties.dataDirectory | default "/var/lib/ecp-endpoint" }}
+    ecp.content.storage.root={{ $instance.ecpProperties.ecpContentStorageRoot | default "${dataDirectory}/content" }}
+    ecp.content.storage.storageId={{ $instance.ecpProperties.ecpContentStorageStorageId | default "1" }}
+
+    ecp.keystore.location={{ $instance.ecpProperties.ecpKeystoreLocation | default "${dataDirectory}/keystore.jks" }}
+    ecp.keystore.password={{ $instance.ecpProperties.ecpKeystorePassword | default "password" }}
+
+    ecp.authKeystore.location={{ $instance.ecpProperties.ecpAuthKeystoreLocation | default "${dataDirectory}/authKeystore.jks" }}
+    ecp.authKeystore.password={{ $instance.ecpProperties.ecpAuthKeystorePassword | default "password" }}
+
+    ## HA Configuration ##
+    # Set and uncomment these keys to complete HA setup
+    # Database
+    {{ if $instance.ecpProperties.ecpDBUrl }}{{ print "ecp.db.url=" $instance.ecpProperties.ecpDBUrl }}{{ else }}#ecp.db.url={{ end }}
+    {{ if $instance.ecpProperties.ecpDBUsername }}{{ print "ecp.db.username=" $instance.ecpProperties.ecpDBUsername }}{{ else }}#ecp.db.username={{ end }}
+    {{ if $instance.ecpProperties.ecpDBPassword }}{{ print "ecp.db.password=" $instance.ecpProperties.ecpDBPassword }}{{ else }}#ecp.db.password={{ end }}
+    {{ if $instance.ecpProperties.springDatasourceValidationQuery }}{{ print "spring.datasource.validation-query=" $instance.ecpProperties.springDatasourceValidationQuery }}{{ else }}#spring.datasource.validation-query=select 1{{ end }}
+    {{ if $instance.ecpProperties.springDatasourceDriverClassName }}{{ print "spring.datasource.driver-class-name=" $instance.ecpProperties.springDatasourceDriverClassName }}{{ else }}#spring.datasource.driver-class-name={{ end }}
+    # Internal broker
+    internalBroker.urls={{ $instance.ecpProperties.internalBrokerUrls | default "amqps://${internalBroker.host:127.0.0.1}:${internalBroker.amqp.port:5672}" }}
+    internalBroker.host={{ $instance.ecpProperties.internalBrokerHost | default "127.0.0.1" }}
+    internalBroker.amqp.port={{ $instance.ecpProperties.internalBrokerAmqpPort | default "5672" }}
+
+    # AMQPS authentication
+    internalBroker.useAuthentication={{ $instance.ecpProperties.internalBrokerUseAuthentication | default "false" }}
+    internalBroker.auth.user={{ $instance.ecpProperties.internalBrokerAuthUser | default "endpoint" }}
+    internalBroker.auth.password={{ $instance.ecpProperties.internalBrokerAuthPassword | default "password" }}
+    internalBroker.keystore.location={{ $instance.ecpProperties.internalBrokerKeystoreLocation | default "${dataDirectory}/authKeystore.jks" }}
+    internalBroker.keystore.password={{ $instance.ecpProperties.internalBrokerKeystorePassword | default "password" }}
+    internalBroker.keystore.authAlias={{ $instance.ecpProperties.internalBrokerKeystoreAuthAlias | default "ecp_module_auth" }}
+    {{- if (($instance).ecpProperties).internalBrokerQueuePrefix }}
+    internalBroker.queuePrefix={{ (($instance).ecpProperties).internalBrokerQueuePrefix | default "ecp.endpoint" }}
+    {{- end }}
+    {{- if (($instance).ecpProperties).internalBrokerBAQueuePrefix }}
+    internalBroker.baQueuePrefix={{ (($instance).ecpProperties).internalBrokerBAQueuePrefix }}
+    {{- end }}
+
+    # Log file location
+    # Both relative and absolute paths are supported
+
+    logging.file.name={{ $instance.ecpProperties.loggingFileName | default "/var/log/ecp-endpoint/ecp.log" }}
+    logging.file.path={{ $instance.ecpProperties.loggingFilePath | default "/var/log/ecp-endpoint" }}
+
+    logging.config={{ $instance.ecpProperties.loggingConfig | default "/etc/ecp-endpoint/ecp-logback.xml" }}
+    logging.level.org.apache.qpid={{ $instance.ecpProperties.loggingLevelOrgApacheQpid | default "WARN" }}
+
+    # Health Actuator Parameters
+    spring.activemq.user=${internalBroker.auth.user}
+    spring.activemq.password=${internalBroker.auth.password}
+
+    ## Disabled JMX protocol for internal broker
+    #NOTE: warning when enabled the property then will be accessible JMX remote on port 1099
+    spring.jmx.enabled={{ $instance.ecpProperties.springJmxEnabled | default "false" }}
+    server.error.whitelabel.enabled={{ $instance.ecpProperties.serverErrorWhiteLabelEnabled | default "false" }}
+    
+    # enable AMQP API
+    ecp.endpoint.amqpApiEnabled={{ $instance.ecpProperties.ecpEndpointAmqpApiEnabled | default "false" }}
+    {{- if $instance.ecpProperties.ecpEndpointAmqpApiEnabled }}
+    {{- if $instance.ecpProperties.ecpEndpointAmqpApiSendHandlerEnabled }}
+    ecp.endpoint.sendHandler[0].beanName={{ $instance.ecpProperties.sendHandlerBeanName | default "amqpApiSendHandler" }}
+    ecp.endpoint.sendHandler[0].typeName={{ $instance.ecpProperties.sendHandlertypeName | default "*" }}
+    {{- end }}
+    {{- end }}
+
+    # JKS Password for private keys stored in DB
+    ecp.db.keystore.password={{ $instance.ecpProperties.ecpDBKeystorePassword | default "password" }}
+
+    ecp.csrf.secret={{ (($instance).ecpProperties).ecpCsrfSecret | default "P9CkNis9r5Pn00RFZwN9oZgi" }}
+
+    {{- if (($instance).ecpProperties).messagingDelayHours }}
+    ecp.automaticUpdate.messagingDelayHours={{ (($instance).ecpProperties).messagingDelayHours }}
+    {{- end }}
+
+    {{- if (($instance).ecpProperties).brokerConnectionDelayHours }}
+    ecp.authKeystore.brokerConnectionDelayHours={{ (($instance).ecpProperties).brokerConnectionDelayHours }}
+    {{- end }}
+
+    {{- if $instance.ecpProperties.ecpNatEnabled }}
+    # NAT configuration
+    ecp.natEnabled={{ $instance.ecpProperties.ecpNatEnabled }}
+   {{- range $j, $item := $instance.ecpProperties.ecpNatTable }}
+    ecp.natTable[{{ $j }}].network={{ .network }}
+    ecp.natTable[{{ $j }}].sourceIp={{ .sourceIp }}
+    ecp.natTable[{{ $j }}].sourcePort={{ .sourcePort }}
+    ecp.natTable[{{ $j }}].destinationIp={{ .destinationIp }}
+    ecp.natTable[{{ $j }}].destinationPort={{ .destinationPort }}
+    {{- end }}
+    {{- end }}
+
+    {{- if $instance.ecpProperties.ecpDirectoryClientSynchronizationHomeComponentDirectoryPrimaryCode }}
+    ecp.directory.client.synchronization.homeComponentDirectoryPrimaryCode={{ $instance.ecpProperties.ecpDirectoryClientSynchronizationHomeComponentDirectoryPrimaryCode }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpDirectoryClientSynchronizationHomeComponentDirectoryPrimaryUrl }}
+    ecp.directory.client.synchronization.homeComponentDirectoryPrimaryUrl={{ $instance.ecpProperties.ecpDirectoryClientSynchronizationHomeComponentDirectoryPrimaryUrl }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpDirectoryClientSynchronizationDirectorySynchronizationInterval }}
+    ecp.directory.client.synchronization.directorySynchronizationInterval={{ $instance.ecpProperties.ecpDirectoryClientSynchronizationDirectorySynchronizationInterval }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpEndpointMessagePathSynchronizationEnabled }}
+    ecp.endpoint.messagePath.synchronization.enabled={{ $instance.ecpProperties.ecpEndpointMessagePathSynchronizationEnabled }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpDirectoryClientSynchronizationMessagePathSynchronizationInterval }}
+    ecp.directory.client.synchronization.messagePathSynchronizationInterval={{ $instance.ecpProperties.ecpDirectoryClientSynchronizationMessagePathSynchronizationInterval }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpDirectoryClientSynchronizationFailsCountLimit }}
+    ecp.directory.client.synchronization.failsCountLimit={{ $instance.ecpProperties.ecpDirectoryClientSynchronizationFailsCountLimit }}
+    {{- end }}
+    {{ if $instance.ecpProperties.ecpDirectoryClientStatisticsDirectorySynchronizationInterval }}
+    ecp.directory.client.statistics.directorySynchronizationInterval={{ $instance.ecpProperties.ecpDirectoryClientStatisticsDirectorySynchronizationInterval }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpEndpointConfigurationReloadCron }}
+    # Reload Job configuration
+    ecp.configuration.reload.cron={{ $instance.ecpProperties.ecpEndpointConfigurationReloadCron }}
+    {{ end }}
+
+  {{- if $instance.ecpProperties.ecpSecurityProxyEnabled }}
+    # SOCKS proxy configuration
+    ecp.security.proxy.enabled={{ $instance.ecpProperties.ecpSecurityProxyEnabled }}
+    ecp.security.proxy.host={{ $instance.ecpProperties.ecpSecurityProxyHost }}
+    ecp.security.proxy.port={{ $instance.ecpProperties.ecpSecurityProxyProxyPort | default "1080" }}
+    {{ if $instance.ecpProperties.ecpSecurityProxyNonProxyHosts }}{{ print "ecp.security.proxy.nonProxyHosts=" $instance.ecpProperties.ecpSecurityProxyNonProxyHosts }}{{ else }}#ecp.security.proxy.nonProxyHosts={{ end }}
+    {{ if $instance.ecpProperties.ecpSecurityProxyUsername }}{{ print "ecp.security.proxy.username=" $instance.ecpProperties.ecpSecurityProxyUsername }}{{ else }}#ecp.security.proxy.username={{ end }}
+    {{ if $instance.ecpProperties.ecpSecurityProxyPassword }}{{ print "ecp.security.proxy.password=" $instance.ecpProperties.ecpSecurityProxyPassword }}{{ else }}#ecp.security.proxy.password={{ end }}
+    {{- end }}
+    # JASYPT encryption
+    jasypt.encryptor.algorithm={{ $instance.ecpProperties.jasyptEncryptorAlgorithm | default "PBEWITHHMACSHA512ANDAES_256" }}
+
+    {{- if $instance.ecpProperties.prometheusMonitoringEnabled }}
+    # Prometheus monitoring
+    management.endpoints.web.exposure.include={{- $instance.ecpProperties.managementEndpointsWebExposureInclude | default "info,health,readiness,prometheus" }}
+    endpoints.prometheus.sensitive=false
+    {{- else }}
+    management.endpoints.web.exposure.include={{- $instance.ecpProperties.managementEndpointsWebExposureInclude | default "info,health,readiness" }}
+    {{- end }}
+
+    {{- if (($instance).ecpProperties).disabledAuthenticationActuatorEndpoints }}
+    ecp.disabledAuthenticationActuatorEndpoints={{ (($instance).ecpProperties).disabledAuthenticationActuatorEndpoints }}
+    {{ end }}
+
+    {{- if $instance.ecpProperties.springDatasourceDbcp2MaxTotal }}
+    spring.datasource.dbcp2.maxTotal={{ $instance.ecpProperties.springDatasourceDbcp2MaxTotal | int64 }}
+    {{- end }}
+    {{- if $instance.ecpProperties.springDatasourceDbcp2MaxIdle }}
+    spring.datasource.dbcp2.maxIdle={{ $instance.ecpProperties.springDatasourceDbcp2MaxIdle | int64 }}
+    {{- end }}
+    {{- if $instance.ecpProperties.springDatasourceDbcp2TimeBetweenEvictionRunsMillis }}
+    spring.datasource.dbcp2.timeBetweenEvictionRunsMillis={{ $instance.ecpProperties.springDatasourceDbcp2TimeBetweenEvictionRunsMillis | int64 }}
+    {{- end }}
+    {{- if $instance.ecpProperties.springDatasourceDbcp2MinEvictableIdleTimeMillis }}
+    spring.datasource.dbcp2.minEvictableIdleTimeMillis={{ $instance.ecpProperties.springDatasourceDbcp2MinEvictableIdleTimeMillis | int64 }}
+    {{- end }}
+    {{- if $instance.ecpProperties.springDatasourceDbcp2NumTestsPerEvictionRun }}
+    spring.datasource.dbcp2.numTestsPerEvictionRun={{ $instance.ecpProperties.springDatasourceDbcp2NumTestsPerEvictionRun | int64 }}
+    {{- end }}
+    {{- if (hasKey $instance.ecpProperties "springDatasourceDbcp2TestOnBorrow") }}
+    spring.datasource.dbcp2.testOnBorrow={{ $instance.ecpProperties.springDatasourceDbcp2TestOnBorrow }}
+    {{- end }}
+    {{- if $instance.ecpProperties.springDatasourceDbcp2ValidationQuery }}
+    spring.datasource.dbcp2.validationQuery={{ $instance.ecpProperties.springDatasourceDbcp2ValidationQuery }}
+    {{- end }}
+    {{- if $instance.ecpProperties.springDatasourceDbcp2ValidationQueryTimeout }}
+    spring.datasource.dbcp2.validationQueryTimeout={{ $instance.ecpProperties.springDatasourceDbcp2ValidationQueryTimeout | int64 }}
+    {{- end }}
+    {{- if (hasKey $instance.ecpProperties "springDatasourceDbcp2PoolPreparedStatements") }}
+    spring.datasource.dbcp2.poolPreparedStatements={{ $instance.ecpProperties.springDatasourceDbcp2PoolPreparedStatements }}
+    {{- end }}
+
+    {{- if $instance.ecpProperties.internalBrokerParameters }}
+    internalBroker.parameters={{ $instance.ecpProperties.internalBrokerParameters }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpEndpointInternalConcurrentConsumers }}
+    ecp.endpoint.internalConcurrentConsumers={{ $instance.ecpProperties.ecpEndpointInternalConcurrentConsumers }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpEndpointExternalConcurrentConsumerCount }}
+    ecp.endpoint.externalConcurrentConsumerCount={{ $instance.ecpProperties.ecpEndpointExternalConcurrentConsumerCount }}
+    {{- end }}
+    {{- if $instance.ecpProperties.springDatasourceTomcatMaxActive }}
+    spring.datasource.tomcat.max-active={{ $instance.ecpProperties.springDatasourceTomcatMaxActive }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpMessageBoxRetentionPeriod }}
+    ecp.messagebox.retentionPeriod={{ $instance.ecpProperties.ecpMessageBoxRetentionPeriod }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpMessageBoxMessageDeletingRunPeriod }}
+    ecp.messagebox.messageDeletingRunPeriod={{ $instance.ecpProperties.ecpMessageBoxMessageDeletingRunPeriod }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpDbCompressionJobEnabled }}
+    ecp.db.compressionJobEnabled={{ $instance.ecpProperties.ecpDbCompressionJobEnabled }}
+    {{- end }}
+
+    {{- if $instance.ecpProperties.ecpLdapUrl }}
+    # LDAP configuration
+    ecp.ldap.url={{ $instance.ecpProperties.ecpLdapUrl }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpLdapTruststoreLocation }}
+    ecp.ldap.truststoreLocation={{ $instance.ecpProperties.ecpLdapTruststoreLocation }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapTruststorePassword }}
+    ecp.ldap.truststorePassword={{ $instance.ecpProperties.ecpLdapTruststorePassword }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapKeystoreLocation }}
+    ecp.ldap.keystoreLocation={{ $instance.ecpProperties.ecpLdapKeystoreLocation }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapKeystorePassword }}
+    ecp.ldap.keystorePassword={{ $instance.ecpProperties.ecpLdapKeystorePassword }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapKeyPassword }}
+    ecp.ldap.keyPassword={{ $instance.ecpProperties.ecpLdapKeyPassword }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapVerifyHost }}
+    ecp.ldap.verifyHost={{ $instance.ecpProperties.ecpLdapVerifyHost }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapRoleAdmin }}
+    ecp.ldap.roleAdmin={{ $instance.ecpProperties.ecpLdapRoleAdmin }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapRoleUser }}
+    ecp.ldap.roleUser={{ $instance.ecpProperties.ecpLdapRoleUser }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapDomain }}
+    ecp.ldap.domain={{ $instance.ecpProperties.ecpLdapDomain }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapBase }}
+    ecp.ldap.base={{ $instance.ecpProperties.ecpLdapBase }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapUsername }}
+    ecp.ldap.username={{ $instance.ecpProperties.ecpLdapUsername }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapPassword }}
+    ecp.ldap.password={{ $instance.ecpProperties.ecpLdapPassword }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapPattern }}
+    ecp.ldap.pattern={{ $instance.ecpProperties.ecpLdapPattern }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapGroupBase }}
+    ecp.ldap.groupBase={{ $instance.ecpProperties.ecpLdapGroupBase }}
+    {{- end }}
+	{{- if $instance.ecpProperties.ecpLdapPasswordAttribute }}
+    ecp.ldap.passwordAttribute={{ $instance.ecpProperties.ecpLdapPasswordAttribute }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpLdapUseServerAuthentication }}
+    ecp.ldap.useServerAuthentication={{ $instance.ecpProperties.ecpLdapUseServerAuthentication }}
+    {{- end }}    
+    {{- if $instance.ecpProperties.ecpLdapSearchFilter }}
+    ecp.ldap.searchFilter={{ $instance.ecpProperties.ecpLdapSearchFilter }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpLdapRoleSearchMatching }}
+    ecp.ldap.roleSearchMatching={{ $instance.ecpProperties.ecpLdapRoleSearchMatching }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpLdapRoleSearchSubtree }}
+    ecp.ldap.roleSearchSubtree={{ $instance.ecpProperties.ecpLdapRoleSearchSubtree }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpLdapRolePrefix }}
+    ecp.ldap.rolePrefix={{ $instance.ecpProperties.ecpLdapRolePrefix }}
+    {{ end }}
+
+    {{- if $instance.ecpProperties.ecpMaxRequestSize }}{{ printf "\n" }}
+    ecp.maxRequestSize={{ $instance.ecpProperties.ecpMaxRequestSize | int }}
+    {{- end }}
+    management.endpoint.health.show-details={{ $instance.ecpProperties.healthShowDetails | default "ALWAYS" }}
+
+
+    ecp.healthExclude={{- $instance.ecpProperties.ecpHealthExclude | default "connectedBrokers,waitingToDeliver,waitingToReceive,isReloading,endpointStatus,certificatesStatus,invalidMessagePath,withoutValidMessagePath,synchronizationStatus,internalBrokerConnected" }}
+    
+    {{- if $instance.ecpProperties.ecpHealthThresholdConnectedBrokers }}
+    ecp.healthThreshold.connectedBrokers={{ $instance.ecpProperties.ecpHealthThresholdConnectedBrokers }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpHealthThresholdWaitingToDeliver }}
+    ecp.healthThreshold.waitingToDeliver={{ $instance.ecpProperties.ecpHealthThresholdWaitingToDeliver }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpHealthThresholdWaitingToReceive }}
+    ecp.healthThreshold.waitingToReceive={{ $instance.ecpProperties.ecpHealthThresholdWaitingToReceive }}
+    {{- end }}
+    {{- if $instance.ecpProperties.ecpHealthThresholdInvalidMessagePath }}
+    ecp.healthThreshold.invalidMessagePath={{ $instance.ecpProperties.ecpHealthThresholdInvalidMessagePath }}
+    {{- end }}
+
+    {{- if $instance.ecpProperties.ecpEndpointPriorityConfiguration }}
+    # priority configuration
+    {{- range $j, $item := $instance.ecpProperties.ecpEndpointPriorityConfiguration }}
+    ecp.endpoint.priorityConfiguration[{{ $j }}].priority={{ .priority }}
+    ecp.endpoint.priorityConfiguration[{{ $j }}].messageType={{ .messageType }}
+    {{- end }}
+    {{- end }}
+
+    {{- if ($instance.ecpProperties).ecpBrokerParameters }}
+    # jms parameters
+    {{- range $j, $item := ($instance.ecpProperties).ecpBrokerParameters }}
+    ecp.brokersParameters[{{ $j }}].broker={{ .broker }}
+    ecp.brokersParameters[{{ $j }}].parameters={{ .parameters }}
+    {{- end}}
+    {{- end}}
+
+  ecp-users.properties: |-
+    {{- range $i, $item := $instance.ecpUsersProperties.ecpEndpointUsers }}
+    ecp.endpoint.users[{{ $i }}].login={{ .login }}
+    ecp.endpoint.users[{{ $i }}].password={{ .password }}
+    ecp.endpoint.users[{{ $i }}].role={{ .role }}
+    {{ end }}
+
+  jmxremote.properties: |-
+    ## JMX is disabled for default
+    ## bellow is example for JMX settings with SSL
+    {{- if $instance.jmxRemoteProperties }}
+    com.sun.management.jmxremote={{ $instance.jmxRemoteProperties.comSunManagementJmxRemote | default "false" }}
+    com.sun.management.jmxremote.port={{ $instance.jmxRemoteProperties.comSunManagementJmxRemotePort | default "1099" }}
+    com.sun.management.jmxremote.rmi.port={{ $instance.jmxRemoteProperties.comSunManagementJmxRemoteRmiPort | default "1098" }}
+    com.sun.management.jmxremote.password.file={{ $instance.jmxRemoteProperties.comSunManagementJmxRemotePasswordFile | default "/etc/ecp-endpoint/jmxremote.password" }}
+    com.sun.management.jmxremote.access.file={{ $instance.jmxRemoteProperties.comSunManagementJmxRemoteAccessFile | default "/etc/ecp-endpoint/jmxremote.access" }}
+    com.sun.management.jmxremote.ssl={{ $instance.jmxRemoteProperties.comSunManagementJmxRemoteSsl | default "false" }}
+    com.sun.management.jmxremote.registry.ssl={{ $instance.jmxRemoteProperties.comSunManagementJmxRegistrySsl | default "false" }}
+    com.sun.management.jmxremote.ssl.config.file={{ $instance.jmxRemoteProperties.comSunManagementJmxRemoteSslConfigFile | default "/etc/ecp-endpoint/jmxremote.ssl" }}
+    com.sun.management.jmxremote.authenticate={{ $instance.jmxRemoteProperties.comSunManagementJmxRemoteAuthenticate | default "false" }}
+    {{- else }}
+    com.sun.management.jmxremote=false
+    #com.sun.management.jmxremote.port=1099
+    #com.sun.management.jmxremote.rmi.port=1098
+    #com.sun.management.jmxremote.password.file=/path/to/jmxremote.password
+    #com.sun.management.jmxremote.access.file=/path/to/jmxremote.access
+    #com.sun.management.jmxremote.ssl=false
+    #com.sun.management.jmxremote.registry.ssl=true
+    #com.sun.management.jmxremote.ssl.config.file=/etc/ecp-endpoint/jmxremote.ssl
+    #com.sun.management.jmxremote.authenticate=true
+    {{- end }}
+
+  jmxremote.password: |-
+    {{- if $instance.jmxRemotePassword }}
+    {{- range $i, $item := $instance.jmxRemotePassword.jmxRemoteUsers }}
+    {{ .login }} {{ .password }}
+    {{- end }}
+    {{- end }}
+
+  jmxremote.access: |-
+    {{- if $instance.jmxRemotePassword }}
+    {{- range $i, $item := $instance.jmxRemotePassword.jmxRemoteUsers }}
+    {{ .login }} {{ .access }}
+    {{- end }}
+    {{- end }}
+
+  jmxremote.ssl: |-
+    {{- if $instance.jmxRemoteSsl }}
+    javax.net.ssl.keyStore={{ $instance.jmxRemoteSsl.javaxNetSslKeystore | default "/path/to/keystore.jks" }}
+    javax.net.ssl.keyStorePassword={{ $instance.jmxRemoteSsl.javaxNetSslKeystorePassword | default "keystore_password" }}
+    javax.net.ssl.trustStore={{ $instance.jmxRemoteSsl.javaxNetSslTrustStore | default "/path/to/truststore.jks" }}
+    javax.net.ssl.trustStorePassword={{ $instance.jmxRemoteSsl.javaxNetSslTrustStorePassword | default "truststore_password" }}
+    {{- else }}
+    #javax.net.ssl.keyStore=/path/to/keystore.jks
+    #javax.net.ssl.keyStorePassword=keystore_password
+    #javax.net.ssl.trustStore=/path/to/truststore.jks
+    #javax.net.ssl.trustStorePassword=truststore_password
+    {{- end }}
+
+  env.conf: |-
+    [Service]
+    Environment='CATALINA_HOME=/usr/share/ecp-endpoint'
+    Environment='CATALINA_BASE=/usr/share/ecp-endpoint'
+    Environment='CATALINA_PID=/usr/share/ecp-endpoint/catalina.pid'
+    {{- if $instance.envConf }}
+    Environment='CATALINA_OPTS=-Xms{{ $instance.envConf.resourcesJvm.xms | default "64M" }} -Xmx{{ $instance.envConf.resourcesJvm.xmx | default "4G" }}\
+    {{- else }}
+    Environment='CATALINA_OPTS=-Xms64M -Xmx4G\
+    {{- end }}
+        -XX:+HeapDumpOnOutOfMemoryError\
+        -XX:HeapDumpPath=/var/log/ecp-endpoint/ecp-dump.hprof\
+        -Dspring.config.additional-location=/etc/ecp-endpoint/ecp.properties,/etc/ecp-endpoint/ecp-users.properties\
+        -Dbroker.internal.auth.settings.location=/etc/ecp-endpoint\
+        -Decp.password.location=/etc/ecp-endpoint/ecp-password.properties\
+        -Decp.endpoint.jms.directory=/etc/ecp-endpoint/jms\
+        -Decp.cluster.manager.localInstanceID=$HOSTNAME\
+        -Dcom.sun.management.config.file=/etc/ecp-endpoint/jmxremote.properties'
+
+  setenv.sh: |-
+    #!/bin/bash
+
+    ## This file will be copied into tomcat_base/bin/setenv.sh
+    ## Setup LOG file location for tomcat
+    export CATALINA_OUT=/var/log/ecp-endpoint/catalina.out
+    export CATALINA_HOME=/usr/share/ecp-endpoint
+    export CATALINA_BASE=/usr/share/ecp-endpoint
+    export CATALINA_PID=/usr/share/ecp-endpoint/catalina.pid
+    export CATALINA_OPTS="-Xms{{- (($instance.envConf).resourcesJvm).xms | default "64M" }} -Xmx{{- (($instance.envConf).resourcesJvm).xmx | default "4G" }}\
+     -XX:+HeapDumpOnOutOfMemoryError\
+     -XX:HeapDumpPath=/var/log/ecp-endpoint/ecp-dump.hprof\
+     -Dspring.config.additional-location=/etc/ecp-endpoint/ecp.properties,/etc/ecp-endpoint/ecp-users.properties\
+     -Dbroker.internal.auth.settings.location=/etc/ecp-endpoint\
+     -Decp.password.location=/etc/ecp-endpoint/ecp-password.properties\
+     -Decp.endpoint.jms.directory=/etc/ecp-endpoint/jms\
+     -Decp.cluster.manager.localInstanceID=$HOSTNAME\
+     -Decp.logFullStackTrace={{ ($instance.envConf).ecpLogFullStackTrace | default "false" }}\
+     -Dcom.sun.management.config.file=/etc/ecp-endpoint/jmxremote.properties"
+
+  ecp-logback.xml: |-
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+
+        <!--http://docs.spring.io/spring-boot/docs/1.2.8.RELEASE/reference/html/howto-logging.html-->
+        <!--http://docs.spring.io/spring-boot/docs/1.2.8.RELEASE/reference/html/boot-features-logging.html-->
+
+        <!--Common logger config and log file path-->
+        <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+        <property name="AUDIT_LOG_FILE" value="${LOG_PATH:-${LOG_TEMP:-${java.io.tmpdir:-/tmp}}}/ecp-audit.log"/>
+        <property name="LOG_FILE" value="${LOG_FILE:-${LOG_PATH:-${LOG_TEMP:-${java.io.tmpdir:-/tmp}}/}ecp.log}"/>
+        <!-- owasp-a1 log message sanitized for CRLF to prevent logger injection -->
+        <property name="FILE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS,Etc/GMT} ${LOG_LEVEL_PATTERN:-%5p} ${PID:- } --- [%t] %-40.40logger{39} : %replace(%m){'[\r\n]', ''}%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+        <property name="CONSOLE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS,Etc/GMT} ${LOG_LEVEL_PATTERN:-%5p} ${PID:- } --- [%t] %-40.40logger{39} : %replace(%m){'[\r\n]', ''}%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+        <property name="LOGBACK_ROLLINGPOLICY_MAX_FILE_SIZE" value="{{ ($instance.ecpLogback).logback_rollingpolicy_max_file_size | default "50MB" }}"/>
+        <property name="LOGBACK_ROLLINGPOLICY_MAX_HISTORY" value="{{ ($instance.ecpLogback).logback_rollingpolicy_max_history | default "7" }}"/>
+        <property name="LOGBACK_ROLLINGPOLICY_TOTAL_SIZE_CAP" value="{{ ($instance.ecpLogback).logback_rollingpolicy_total_size_cap | default "70MB" }}"/>
+
+
+        <!-- ECP Audit Log file appender and logger -->
+        <springProfile name="ecp-audit">
+            <appender name="EcpAuditAppender"
+                      class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <encoder>
+                    <!-- owasp-a1 log message sanitized for CRLF to prevent logger injection -->
+                    <pattern>
+                        %d{yyyy-MM-dd HH:mm:ss.SSS,Etc/GMT} %logger{5} - %replace(%msg){'[\r\n]', ''}%n
+                    </pattern>
+                </encoder>
+                <file>${AUDIT_LOG_FILE}</file>
+                <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+                    <fileNamePattern>${AUDIT_LOG_FILE}.%i</fileNamePattern>
+                </rollingPolicy>
+                <triggeringPolicy
+                        class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+                    <MaxFileSize>10MB</MaxFileSize>
+                </triggeringPolicy>
+            </appender>
+
+            <logger name="EcpAuditLog" level="INFO" additivity="false">
+                <appender-ref ref="EcpAuditAppender"/>
+            </logger>
+        </springProfile>
+
+        <springProfile name="ecp-inmemory">
+            <!--Console appender definition-->
+            <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+            <root level="INFO">
+                <appender-ref ref="CONSOLE"/>
+            </root>
+        </springProfile>
+
+        <springProfile name="!ecp-inmemory">
+            <!--Show hibernate errors only - resolving err msg for warnings takes too much time-->
+            <logger name="org.hibernate" level="ERROR"/>
+
+            <!--File appender definition-->
+            <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
+
+            <springProfile name="console-logging">
+                <!--Console appender definition-->
+              <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+              <root level="INFO">
+                  <appender-ref ref="FILE"/>
+                  <appender-ref ref="CONSOLE"/>
+              </root>
+          </springProfile>
+
+          <springProfile name="!console-logging">
+              <root level="INFO">
+                  <appender-ref ref="FILE"/>
+              </root>
+          </springProfile>
+      </springProfile>
+    </configuration>
+
+  server.xml: |-
+    <?xml version='1.0' encoding='utf-8'?>
+    <!--
+      Licensed to the Apache Software Foundation (ASF) under one or more
+      contributor license agreements.  See the NOTICE file distributed with
+      this work for additional information regarding copyright ownership.
+      The ASF licenses this file to You under the Apache License, Version 2.0
+      (the "License"); you may not use this file except in compliance with
+      the License.  You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License.
+    -->
+    <!-- Note:  A "Server" is not itself a "Container", so you may not
+         define subcomponents such as "Valves" at this level.
+         Documentation at /docs/config/server.html
+     -->
+    <Server port="8005" shutdown="SHUTDOWN">
+        <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+        <!-- Security listener. Documentation at /docs/config/listeners.html
+        <Listener className="org.apache.catalina.security.SecurityListener" />
+        -->
+        <!--APR library loader. Documentation at /docs/apr.html -->
+        <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on" />
+        <!-- Prevent memory leaks due to use of particular java/javax APIs-->
+        <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+        <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+        <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+        <!-- Global JNDI resources
+             Documentation at /docs/jndi-resources-howto.html
+        -->
+        <GlobalNamingResources>
+            <!-- Editable user database that can also be used by
+                 UserDatabaseRealm to authenticate users
+            -->
+            <Resource name="UserDatabase" auth="Container"
+                      type="org.apache.catalina.UserDatabase"
+                      description="User database that can be updated and saved"
+                      factory="org.apache.catalina.users.MemoryUserDatabaseFactory"
+                      pathname="conf/tomcat-users.xml" />
+        </GlobalNamingResources>
+
+        <!-- A "Service" is a collection of one or more "Connectors" that share
+             a single "Container" Note:  A "Service" is not itself a "Container",
+             so you may not define subcomponents such as "Valves" at this level.
+             Documentation at /docs/config/service.html
+         -->
+        <Service name="Catalina">
+
+            <!--The connectors can use a shared executor, you can define one or more named thread pools-->
+            <!--
+            <Executor name="tomcatThreadPool" namePrefix="catalina-exec-"
+                maxThreads="150" minSpareThreads="4"/>
+            -->
+
+
+            <!-- A "Connector" represents an endpoint by which requests are received
+                 and responses are returned. Documentation at :
+                 Java HTTP Connector: /docs/config/http.html (blocking & non-blocking)
+                 Java AJP  Connector: /docs/config/ajp.html
+                 APR (HTTP/AJP) Connector: /docs/apr.html
+                 Define a non-SSL/TLS HTTP/1.1 Connector on port 8080
+            -->
+            <!--
+            <Connector port="8080" protocol="HTTP/1.1"
+                       connectionTimeout="20000"
+                       redirectPort="8443" />
+            -->
+            <!-- A "Connector" using the shared thread pool-->
+            {{- if ($instance.service.http).unsecure }}
+            <Connector executor="tomcatThreadPool"
+                       port="{{ ($instance.service.http).port | default 8080 }}" protocol="HTTP/1.1"
+                       connectionTimeout="20000"
+                       redirectPort="8443" />
+            {{- end }}
+            {{- if or $instance.service.https (not ($instance.service.http).unsecure | default false) }}
+            <!-- Define a SSL/TLS HTTP/1.1 Connector on port 8443
+                 This connector uses the NIO implementation that requires the JSSE
+                 style configuration. When using the APR/native implementation, the
+                 OpenSSL style configuration is required as described in the APR/native
+                 documentation -->
+
+            <Connector port="{{ ($instance.service.https).port | default ($instance.service.http).port | default 8443 }}" protocol="eu.entsoe.ecp.connector.protocol.EcpHttp11NioProtocol"
+                       sslImplementationName="org.apache.tomcat.util.net.jsse.JSSEImplementation"
+                       maxThreads="150" SSLEnabled="true" maxParameterCount="1000" >
+            <UpgradeProtocol className="org.apache.coyote.http2.Http2Protocol" />
+
+            <SSLHostConfig protocols="TLSv1.3" ciphers="TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_AES_128_GCM_SHA256" >
+              <Certificate certificateKeystoreFile="{{ $instance.ecpProperties.ecpAuthKeystoreLocation | default "/var/lib/ecp-endpoint/authKeystore.jks" }}" certificateKeystorePassword="{{ $instance.ecpProperties.ecpAuthKeystorePassword | default "password" }}" type="RSA" />
+            </SSLHostConfig>
+
+            </Connector>
+            {{- end }}
+
+            <!-- Define an AJP 1.3 Connector on port 8009
+            <Connector port="8009" protocol="AJP/1.3" redirectPort="8443" />-->
+
+
+            <!-- An Engine represents the entry point (within Catalina) that processes
+                 every request.  The Engine implementation for Tomcat stand alone
+                 analyzes the HTTP headers included with the request, and passes them
+                 on to the appropriate Host (virtual host).
+                 Documentation at /docs/config/engine.html -->
+
+            <!-- You should set jvmRoute to support load-balancing via AJP ie :
+            <Engine name="Catalina" defaultHost="localhost" jvmRoute="jvm1">
+            -->
+            <Engine name="Catalina" defaultHost="localhost">
+
+                <!--For clustering, please take a look at documentation at:
+                    /docs/cluster-howto.html  (simple how to)
+                    /docs/config/cluster.html (reference documentation) -->
+                <!--
+                <Cluster className="org.apache.catalina.ha.tcp.SimpleTcpCluster"/>
+                -->
+                  {{- if $instance.sessionReplication }}
+                  <Cluster className="org.apache.catalina.ha.tcp.SimpleTcpCluster">
+                    <Channel className="org.apache.catalina.tribes.group.GroupChannel">
+                      <Membership className="org.apache.catalina.tribes.membership.cloud.CloudMembershipService"
+                        membershipProviderClassName="org.apache.catalina.tribes.membership.cloud.DNSMembershipProvider"/>
+                    </Channel>
+                  </Cluster>
+                  {{- end }}
+                <!-- Use the LockOutRealm to prevent attempts to guess user passwords
+                     via a brute-force attack -->
+                <Realm className="org.apache.catalina.realm.LockOutRealm">
+                    <!-- This Realm uses the UserDatabase configured in the global JNDI
+                         resources under the key "UserDatabase".  Any edits
+                         that are performed against this UserDatabase are immediately
+                         available for use by the Realm.  -->
+                    <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
+                           resourceName="UserDatabase"/>
+                </Realm>
+
+                <Host name="localhost"  appBase="webapps"
+                      unpackWARs="true" autoDeploy="true">
+
+                    <!-- SingleSignOn valve, share authentication between web applications
+                         Documentation at: /docs/config/valve.html -->
+                    <!--
+                    <Valve className="org.apache.catalina.authenticator.SingleSignOn" />
+                    -->
+
+                    <Valve className="org.apache.catalina.valves.RemoteIpValve" internalProxies="" />
+                    <!-- Access log processes all example.
+                         Documentation at: /docs/config/valve.html
+                         Note: The pattern used is equivalent to using pattern="common" -->
+                    <Valve className="eu.entsoe.ecp.valve.EcpAccessLogValve" directory="/var/log/ecp-endpoint"
+                           prefix="localhost_access_log" suffix=".txt" rotatable="false"
+                           pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+                    <Valve className="org.apache.catalina.valves.ErrorReportValve" showReport="false" showServerInfo="false"/>
+
+                </Host>
+            </Engine>
+        </Service>
+    </Server>
+  {{ if $instance.sessionReplication -}}
+  context.xml: |-
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!--
+        Licensed to the Apache Software Foundation (ASF) under one or more
+        contributor license agreements.  See the NOTICE file distributed with
+        this work for additional information regarding copyright ownership.
+        The ASF licenses this file to You under the Apache License, Version 2.0
+        (the "License"); you may not use this file except in compliance with
+        the License.  You may obtain a copy of the License at
+      
+            http://www.apache.org/licenses/LICENSE-2.0
+      
+        Unless required by applicable law or agreed to in writing, software
+        distributed under the License is distributed on an "AS IS" BASIS,
+        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and
+        limitations under the License.
+      -->
+      <!-- The contents of this file will be loaded for each web application -->
+      <Context>
+      
+          <!-- Default set of monitored resources. If one of these changes, the    -->
+          <!-- web application will be reloaded.                                   -->
+          <WatchedResource>WEB-INF/web.xml</WatchedResource>
+          <WatchedResource>WEB-INF/tomcat-web.xml</WatchedResource>
+          <WatchedResource>${catalina.base}/conf/web.xml</WatchedResource>
+      
+          <!-- Uncomment this to disable session persistence across Tomcat restarts -->
+          <!--
+          <Manager pathname="" />
+          -->
+          <Manager className="org.apache.catalina.ha.session.DeltaManager" expireSessionsOnShutdown="false" notifyListenersOnReplication="true"/>
+      </Context>
+  {{ end -}}
+
+  ecp-password.properties: |-
+    {{- if $instance.ecpPasswordProperties }}
+    {{ $instance.ecpPasswordProperties.encryptionPassword }}
+    {{- end }}
+
+  users.properties: |-
+    {{ ($instance.ecpProperties).internalBrokerAuthUser | default "endpoint" }}={{ ($instance.ecpProperties).internalBrokerAuthPassword | default "password" }}
+    {{- range $j, $item := ($instance.usersProperties).users }}
+    {{ .login }}={{ .password }}
+    {{- end }}
+
+  groups.properties: |-
+    admins={{ ($instance.ecpProperties).internalBrokerAuthUser | default "endpoint" }}
+    tempDestinationAdmins={{ ($instance.ecpProperties).internalBrokerAuthUser | default "endpoint" }}
+    users={{ ($instance.ecpProperties).internalBrokerAuthUser | default "endpoint" }}{{- range $j, $item := ($instance.usersProperties).users }},{{- .login }}{{- end }}
+
+  {{ range $i, $item := $instance.configMap }}
+  {{ .subPath }}: |-
+  {{- .content | nindent 4 }}
+  {{ end }}
+---
+{{ end }}

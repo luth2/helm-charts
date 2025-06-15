@@ -1,0 +1,11 @@
+global:
+  imageMysqlClient:
+    name: arey/mysql-client # URL for MySQL client image pull  - readiness check for MySQL
+  imageMsSqlClient:
+    name: mcr.microsoft.com/mssql-tools # URL for MSSQL client image pull - readiness check for MSSQL
+  imagePostgresClient:
+    name: bitnami/postgresql:15  # URL for Postgres client image pull - readiness check for PostgreSQL
+  imageOracleClient:
+    name: ghcr.io/oracle/oraclelinux8-instantclient:21  # URL for SQLPlus client image pull - readiness check for Oracle
+  imageBusybox:
+    name: busybox # URL for busybox image pull - used for ECP side containers - e.g. file permission fix

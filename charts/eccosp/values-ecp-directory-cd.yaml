@@ -1,0 +1,244 @@
+# The commented parameters have default values but these defaults can be overriden when enabled
+
+ecp-directory: # type of ECP component. Can be ecp-endpoint, ecp-directory, ecp-broker
+  enabled: true # boolean flag which defines whether the component will be deployed or not
+
+  instance: # array of ECP directory instances - one values file can hold multiple instances
+    - name: cd # name of kubernetes instance
+      image: # section for information about Docker image
+        name: entsoe/ecp-directory # URL to docker image.
+        tag: 4.16.0 # Docker image tag - version or 'latest'
+#        pullPolicy: IfNotPresent # Pull policy specifies when the image should be pulled, it is possible to use 'Always' so on every pod (re)start is pulled
+      replicaCount: 1 # number of replicas - ECP cluster
+      sessionReplication: true # Specifies if the session replication should be activated between ECP CD instances (login purposes)
+      resourcesK8s: # section for CPU and memory specification
+        requests: # minimum guaranteed amount of a resource that is reserved for a container
+          cpu: 1000m # minimum CPU - one CPU = 1000m or 1
+          ephemeralStorage: 256Mi # minimum ephemeral storage for application
+          memory: 512Mi # minimum memory for container
+        limits: # maximum amount of a resource to be used by a container. Should be always higher than application can allocate (xmx)
+          cpu: 1000m # maximum CPU - two CPUs = 2000m or 2
+          memory: 1Gi # maximum memory for container - 1Gi is equal to 1024 Mi
+      storageData: 1Gi  # Storage for embedded database and certificates. If external DB is used, the value can be lower.
+      storageLogs: 256Mi # storage for logs
+      keepLogsAfterRestart: true # boolean flag - indicates if ECP logs are persisted after pod restart, default value false
+      livenessProbe: false # automatic restart if pod is not in health state, default value false
+      readinessProbe: true # ECP pod will not started before readiness probe is fulfilled - check of availability of external DB
+
+      service: # section for definition of services exposed within kubernetes environment
+#        type: NodePort # Type of the network service - NodePort/LoadBalancer/ClusterIP
+        https: # protocol used for accessing GUI - can be http or https
+          port: 8443 # port used for exposing HTTP(S) service
+#          nodePort: 30443  # port used for exposing HTTP(S) service as for external access. Range - 30000-32767
+        annotations: # service annotation section
+
+      ingress: # an object that allows access to Kubernetes services from outside the Kubernetes cluster.
+        enabled: false # boolean flag for enable/disable ingress, default value false
+#        apiVersion: networking.k8s.io/v1 # Specifies the api version of ingress resource
+#        contextPath: / # context path for ingress, default value '/'
+#        host: ecp-directory.cd.eccosp # URL on which the ECP Component Directory is exposed. Address needs to be aligned with hosting.
+#        tls: # section for TLS definition for HTTPS connection to ingress
+#          secretName: tls-secret  # secret where TLS certificate is stored
+#        annotations: # ingress annotations section
+#          kubernetes.io/ingress.class: nginx # ingress controller definition
+#          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS" # important for remote host tunelling
+#          nginx.ingress.kubernetes.io/ssl-passthrough: 'true' # important for remote host tunelling
+
+      # The naming convention for configuration files name and parameters is camelCase instead of 'dot case format'.
+      # Mapping of Helm values to ECP configuration file is available in config map ./ecp-directory/templates/configMap.yaml
+      ecpDirectoryProperties: # stands for ecp-directory.properties
+        springProfilesActive: ecp-nonha, console-logging #stands for parameter spring.profiles.active
+
+        dataDirectory: /var/lib/ecp-directory # dataDirectory config parameter for storage of persistent data
+
+        ecpKeystoreLocation: /var/lib/ecp-directory/keystore.jks # ecp.keystore.location
+        ecpKeystorePassword: password # ecp.keystore.password
+
+        ecpAuthKeystoreLocation: /var/lib/ecp-directory/authKeystore.jks #ecp.authKeystore.location
+        ecpAuthKeystorePassword: password # ecp.authKeystore.password
+
+        ecpAutomaticUpdateEnabled: true # ecp.automaticUpdate.enabled
+#        ecpAutomaticUpdateDayBefore: 30 # ecp.automaticUpdate.dayBefore
+#        ecpAutomaticUpdateCheckInterval: "0 */5 * * * *" # ecp.automaticUpdate.checkInterval
+
+        loggingFileName: /var/log/ecp-directory/ecp.log # logging.file.name
+        loggingFilePath: /var/log/ecp-directory # logging.file.path
+
+        loggingConfig: /etc/ecp-directory/ecp-logback.xml # logging.config
+
+        springJmxEnabled: false # spring.jmx.enabled
+
+        serverErrorWhiteLabelEnabled: false # server.error.whitelabel.enabled
+
+        ecpDirectoryRegKeystorePassword: password # ecp.directory.regKeystore.password
+        ecpDirectoryCAKeystorePassword: password # ecp.directory.caKeystore.password
+
+        ecpDBKeystorePassword: password # ecp.db.keystore.password
+#        ecpmMetricsSyncThreshold: 10 #ecp.metricsSyncThreshold
+
+#        prometheusMonitoringEnabled: false # management.endpoints.web.exposure.include=info,health,readiness,prometheus
+
+        # Uncomment desired DB configuration section if external DB is used. Change value of parameters as needed.
+
+        # ------ mysql -------
+#         springProfilesActive: ecp-ha # spring.profiles.active
+#         ecpDBUrl: jdbc:mariadb://1.2.3.4:3306/cd?characterEncoding=UTF-8&useSSL=false&autoReconnect=true # ecp.db.url
+#         ecpDBUsername: cd # ecp.db.username
+#         ecpDBPassword: password # ecp.db.password
+#         ecpDBHostname: 1.2.3.4 # Required for readiness check, server hostname or IP
+#         ecpDBName: cd # Required for readiness check, external database name
+#         springDatasourceValidationQuery: select 1 # spring.datasource.validation-query
+#         springDatasourceDriverClassName: org.mariadb.jdbc.Driver # spring.datasource.driver-class-name
+
+        # ------ mssql -------
+#         springProfilesActive: ecp-ha
+#         ecpDBUrl: jdbc:sqlserver://1.2.3.4:1433;databaseName=cd
+#         ecpDBUsername: cd
+#         ecpDBPassword: password
+#         ecpDBHostname: 1.2.3.4
+#         ecpDBName: cd
+#         springDatasourceValidationQuery: select 1
+#         springDatasourceDriverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+        # ------ postgres -------
+#         springProfilesActive: ecp-ha
+#         ecpDBUrl: jdbc:postgresql://1.2.3.4:5432/cd
+#         ecpDBUsername: cd
+#         ecpDBPassword: password
+#         ecpDBHostname: 1.2.3.4
+#         ecpDBName: cd
+#         springDatasourceValidationQuery: select 1
+#         springDatasourceDriverClassName: org.postgresql.Driver
+
+        # ------ oracle -------
+#         springProfilesActive: ecp-ha
+#         ecpDBUrl: jdbc:oracle:thin:@1.2.3.4:1521/my_namespace
+#         ecpDBUsername: cd
+#         ecpDBPassword: password
+#         ecpDBHostname: 1.2.3.4
+#         ecpDBName: cd
+#         springDatasourceValidationQuery: select 1 from dual
+#         springDatasourceDriverClassName: oracle.jdbc.OracleDriver
+
+#        ecpDirectoryRegistrationNewCertificateSpecificCodeEnabled: true # ecp.directory.registration.newCertificate.specificCodeEnabled
+#        ecpDirectoryComponentDirectorySynchronizationInterval: 0 */5 * * * * # ecp.directory.component.directorySynchronizationInterva
+#        ecpSpecificCertificatesCleningEnabled: true # ecp.specificCertificatesCleaning.enabled
+#        ecpSpecificCertificatesCleningInterval: 0 10 9 * * * # ecp.specificCertificatesCleaning.interval
+#        ecpSpecificCertificatesCleningOffset: 1 # ecp.specificCertificatesCleaning.offset
+#        ecpDirectoryRestrictAccessEnabled: true # ecp.directory.restrictAccess.enabled
+#        ecpDirectoryRestrictAccessallowed: 127.0.0.1 # ecp.directory.restrictAccess.allowed
+#        ecpDirectoryRegistrationNewCertificateValidity: 365 # ecp.directory.registration.newCertificate.validity
+#        ecpDirectoryClientSynchronizationDirectorySynchronizationInterval: 0 */6 * * * * # ecp.directory.client.synchronization.directorySynchronizationInterval
+#        ecpDirectoryTtl: "259200000" # ecp.directory.ttl
+#        ecpNatEnabled: false # NAT is disabled by default - equals to  ecp.natEnabled
+#        ecpNatTable:  # additional parameter for NAT array. Array values are divided by ' - '
+#          - network: internet # ecp.natTable[0].network
+#            sourceIp: 1.2.3.4 # ecp.natTable[0].sourceIp
+#            sourcePort: 8443 # ecp.natTable[0].sourcePort
+#            destinationIp: 5.6.7.8 # ecp.natTable[0].destinationIp
+#            destinationPort: 8443 # ecp.natTable[0].destinationPort
+#          - network: ATOM ecp.natTable[1].network
+#            sourceIp: 1.1.1.1 # ecp.natTable[1].sourceIp
+#            sourcePort: 5671 # ecp.natTable[1].sourcePort
+#            destinationIp: 2.2.2.2 # ecp.natTable[1].destinationIp
+#            destinationPort: 5671 # ecp.natTable[1].destinationPort
+
+#        ecpSecurityProxyEnabled: true # ecp.security.proxy.enabled
+#        ecpSecurityProxyHost: socks-host  # ecp.security.proxy.host
+#        ecpSecurityProxyProxyPort: 1081 # ecp.security.proxy.port # ecp.security.proxy.nonProxyHosts
+#        ecpSecurityProxyNonProxyHosts: 127.0.0.1,0.0.0.0 # ecp.security.proxy.username
+#        ecpSecurityProxyUsername: sockssuser # ecp.security.proxy.username
+#        ecpSecurityProxyPassword: sockspassword # ecp.security.proxy.password
+#        jasyptEncryptorAlgorithm: PBEWithHMACSHA512AndAES_256 # jasypt.encryptor.algorithm
+
+#        ecpMaxRequestSize: 2097152 # ecp.maxRequestSize
+
+#        ecpHealthExclude: isReloading,certificateStatus,numberOfActiveComponents,numberOfExpiredComponents,countOfComponentsWithNotRenewedCertificates,countOfEndpointsWithoutValidMessagePath,countOfNotSynchronizedComponents,countOfNotSynchronizedDirectories,synchronizationStatus
+
+#        ecpHealthThresholdNumberOfActiveComponents: # ecp.healthThreshold.numberOfActiveComponents
+#        ecpHealthThresholdNumberOfExpiredComponents: # ecp.healthThreshold.numberOfExpiredComponents
+#        ecpHealthThresholdCountOfComponentsWithNotRenewedCertificates: # ecp.healthThreshold.countOfComponentsWithNotRenewedCertificates
+#        ecpHealthThresholdCountOfEndpointsWithoutValidMessagePath: # ecp.healthThreshold.countOfEndpointsWithoutValidMessagePath
+#        ecpHealthThresholdCountOfNotSynchronizedComponents: # ecp.healthThreshold.countOfNotSynchronizedComponents
+#        ecpHealthThresholdCountOfNotSynchronizedDirectories: # ecp.healthThreshold.countOfNotSynchronizedDirectories
+
+        ecpCsrfSecret: P9CkNis9r5Pn00RFZwN9oZgi # ecp.csrf.secret
+
+        # DBCP2 connection pool configuration
+#        springDatasourceDbcp2MaxTotal: 100 # spring.datasource.dbcp2.maxTotal
+#        springDatasourceDbcp2MaxIdle: 100 # spring.datasource.dbcp2.maxIdle
+#        springDatasourceDbcp2TimeBetweenEvictionRunsMillis: 1800000 # spring.datasource.dbcp2.timeBetweenEvictionRunsMillis
+#        springDatasourceDbcp2MinEvictableIdleTimeMillis: 60000 # spring.datasource.dbcp2.minEvictableIdleTimeMillis
+#        springDatasourceDbcp2NumTestsPerEvictionRun: 3 # spring.datasource.dbcp2.numTestsPerEvictionRun
+#        springDatasourceDbcp2TestOnBorrow: true # spring.datasource.dbcp2.testOnBorrow
+#        springDatasourceDbcp2ValidationQuery: values 1 # spring.datasource.dbcp2.validationQuery
+#        springDatasourceDbcp2ValidationQueryTimeout: -1 # spring.datasource.dbcp2.validationQueryTimeout
+#        springDatasourceDbcp2PoolPreparedStatements: false # spring.datasource.dbcp2.poolPreparedStatements
+
+#        ecpDirectoryIsCDS: false # ecp.directory.isCDS
+
+        ## Spring Release 2025
+#        ecpLdapUrl: # ecp.ldap.url
+#        ecpLdapTruststoreLocation: # ecp.ldap.truststoreLocation
+#        ecpLdapTruststorePassword: # ecp.ldap.truststorePassword
+#        ecpLdapKeystoreLocation: # ecp.ldap.keystoreLocation
+#        ecpLdapKeystorePassword: # ecp.ldap.keystorePassword
+#        ecpLdapVerifyHost: # ecp.ldap.verifyHost
+#        ecpLdapKeyPassword: # ecp.ldap.keyPassword
+#        ecpLdapDomain: # ecp.ldap.domain
+#        ecpLdapBase: # ecp.ldap.base
+#        ecpLdapUsername: # ecp.ldap.username
+#        ecpLdapPassword: # ecp.ldap.password
+#        ecpLdapPattern: # ecp.ldap.pattern
+#        ecpLdapGroupBase: # ecp.ldap.groupBase
+#        ecpLdapPasswordAttribute: # ecp.ldap.passwordAttribute
+#        ecpLdapRoleAdmin: # ecp.ldap.roleAdmin
+#        ecpLdapRoleUser: # ecp.ldap.roleUser
+#        ecpLdapUseServerAuthentication: # ecp.ldap.useServerAuthentication
+#        ecpLdapSearchFilter: # ecp.ldap.searchFilter
+#        ecpLdapRoleSearchMatching: # ecp.ldap.roleSearchMatching
+#        ecpLdapRoleSearchSubtree: # ecp.ldap.roleSearchSubtree
+#        ecpLdapRolePrefix: # ecp.ldap.rolePrefix
+
+#        disabledAuthenticationActuatorEndpoints: # ecp.disabledAuthenticationActuatorEndpoints
+#        managementEndpointsWebExposureInclude: # info,health,readiness,prometheus
+
+      envConf: # env.conf file
+        resourcesJvm:  # memory allocation for ECP component
+          xms: 64M # lower bound of java heap memory size
+          xmx: 768M # upper bound of java heap memory size
+#        ecpLogFullStackTrace: false # ecp.logFullStackTrace
+
+      ecpUsersProperties: # ecp-users.properties
+        ecpDirectoryUsers: # array of users
+          - login: admin # ecp.directory.users[0].login
+            password: password  # ecp.directory.users[0].password
+            role: admin #ecp.directory.users[0].role
+
+#      ecpPasswordProperties: # ecpPasswordProperties
+#        encryptionPassword: encryptionPassword # encryption password for Jasypt
+
+
+#      jmxRemoteProperties:  # jmxremote.properties
+#        comSunManagementJmxRemote: true   # com.sun.management.jmxremote
+#        comSunManagementJmxRemotePort: 2099 # com.sun.management.jmxremote.port
+#        comSunManagementJmxRemoteRmiPort: 2098 # com.sun.management.jmxremote.rmi.port
+#        comSunManagementJmxRemotePasswordFile: /etc/ecp-directory/jmxremote.password # com.sun.management.jmxremote.password.file
+#        comSunManagementJmxRemoteAccessFile: /etc/ecp-directory/jmxremote.access # com.sun.management.jmxremote.access.file
+#        comSunManagementJmxRemoteSsl: true # com.sun.management.jmxremote.ssl
+#        comSunManagementJmxRegistrySsl: true # com.sun.management.jmxremote.registry.ssl
+#        comSunManagementJmxRemoteSslConfigFile: /etc/ecp-directory/jmxremote.ssl # com.sun.management.jmxremote.ssl.config.file
+#        comSunManagementJmxRemoteAuthenticate: true # com.sun.management.jmxremote.authenticate
+
+#      jmxRemoteSsl:  # jmxremote.ssl
+#        javaxNetSslKeystore: /path/to/keystore.jks # javax.net.ssl.keyStore
+#        javaxNetSslKeystorePassword: keystore_password # javax.net.ssl.keyStorePassword
+#        javaxNetSslTrustStore: /path/to/truststore.jks # javax.net.ssl.trustStore
+#        javaxNetSslTrustStorePassword: truststore_password # javax.net.ssl.trustStorePassword
+
+# global config
+global: # global config
+  storage: # storage section
+    class: standard # storage class – needs to be provided by Kubernetes cluster administrator
+  imagePullSecrets: # secrets which hold information about login to docker repository
+    - name: regcred # name of secret – name is defined by Kubernetes cluster administrator
