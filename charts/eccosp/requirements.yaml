@@ -2,20 +2,20 @@ dependencies:
 
 - name: ecp-endpoint
   version: 4.16.0
-  repository: file://./charts/ecp-endpoint
+  repository: https://luth2.github.io/helm-charts
   condition: ecp-endpoint.enabled
 
 - name: ecp-directory
   version: 4.16.0
-  repository: file://./charts/ecp-directory
+  repository: https://luth2.github.io/helm-charts
   condition: ecp-directory.enabled
 
 - name: ecp-broker
   version: 4.16.0
-  repository: file://./charts/ecp-broker
+  repository: https://luth2.github.io/helm-charts
   condition: ecp-broker.enabled
 
 - name: eccosp-artemis
   version: 4.16.0
-  repository: file://./charts/eccosp-artemis
+  repository: https://luth2.github.io/helm-charts
   condition: eccosp-artemis.enabled
