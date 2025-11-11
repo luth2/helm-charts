@@ -1,0 +1,3 @@
+global:
+  imageBusybox:
+    name: busybox # URL for busybox image pull - used for ECP side containers - e.g. file permission fix

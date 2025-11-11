@@ -1,0 +1,21 @@
+dependencies:
+
+- name: ecp-endpoint
+  version: 4.17.0
+  repository: file://./charts/ecp-endpoint
+  condition: ecp-endpoint.enabled
+
+- name: ecp-directory
+  version: 4.17.0
+  repository: file://./charts/ecp-directory
+  condition: ecp-directory.enabled
+
+- name: ecp-broker
+  version: 4.17.0
+  repository: file://./charts/ecp-broker
+  condition: ecp-broker.enabled
+
+- name: eccosp-artemis
+  version: 4.17.0
+  repository: file://./charts/eccosp-artemis
+  condition: eccosp-artemis.enabled

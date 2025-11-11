@@ -1,0 +1,74 @@
+{{- range $i, $instance := .Values.instance }}
+{{- if or $instance.enabled (not (hasKey $instance "enabled")) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
+  labels:
+    backup.component.name: {{ $.Release.Name }}
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+{{- with ($instance.service).annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  type: {{ ($instance.service).type | default "ClusterIP" }}
+  ports:
+{{- if (($instance.service).http).port }}
+    - name: http
+      port: {{ $instance.service.http.port | default "8161" }}
+      protocol: TCP
+      {{- if $instance.service.http.nodePort }}
+      nodePort: {{ $instance.service.http.nodePort }}
+      {{- end }}
+{{- end }}
+{{- if (($instance.service).https).port }}
+    - name: https
+      port: {{ $instance.service.https.port | default "8162" }}
+      protocol: TCP
+      {{- if $instance.service.https.nodePort }}
+      nodePort: {{ $instance.service.https.nodePort }}
+      {{- end }}
+{{- end }}
+    - name: amqps
+      port: {{ (($instance.service).amqps).port | default "5671" }}
+      protocol: TCP
+      {{- if $instance.service.amqps.nodePort }}
+      nodePort: {{ $instance.service.amqps.nodePort }}
+      {{- end }}
+
+  selector:
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+{{- if ($instance.service).loadBalancerIP }}
+  loadBalancerIP: {{ $instance.service.loadBalancerIP }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-headless-svc
+  labels:
+    backup.component.name: {{ $.Release.Name }}
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+{{- with ($instance.service).annotations }}
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+  ports:
+    - protocol: TCP
+      port: 61616
+      targetPort: 61616
+---
+{{- end }}
+{{- range $j, $item := $instance.services }}
+{{- toYaml $item | nindent 0 }}
+---
+{{- end }}
+{{ end}}

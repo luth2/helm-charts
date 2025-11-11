@@ -1,0 +1,41 @@
+{{- range $i, $instance := .Values.instance }}
+  {{- if $instance.ingress.enabled -}}
+apiVersion: {{ $instance.ingress.apiVersion | default "networking.k8s.io/v1" }}
+kind: Ingress
+metadata:
+  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-ingress
+  labels:
+    backup.component.name: {{ $.Release.Name }}
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+    app-svc: {{ $.Release.Service }}
+{{- with $instance.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  ingressClassName: {{ $instance.ingress.ingressClassName | default "nginx"}}
+{{- if $instance.ingress.tls }}
+  tls:
+    - hosts:
+        - {{$instance.ingress.host}}
+      secretName: {{ $instance.ingress.tls.secretName }}
+{{- end }}
+  rules:
+  - host: {{$instance.ingress.host}}
+    http:
+      paths:
+      - backend:
+          {{- if eq ($instance.ingress.apiVersion | default "networking.k8s.io/v1") "networking.k8s.io/v1" }}
+          service:
+            name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
+            port:
+              number: {{ ($instance.service.http).port | default ($instance.service.https).port }}
+        pathType: Prefix
+          {{- else }}
+          serviceName: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
+          servicePort: {{ ($instance.service.http).port | default ($instance.service.https).port }}
+          {{- end }}
+        path: {{ $instance.ingress.contextPath | default "/" }}
+  {{- end }}
+---
+{{ end }}

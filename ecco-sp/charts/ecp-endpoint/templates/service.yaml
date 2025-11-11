@@ -1,0 +1,77 @@
+{{- range $i, $instance := .Values.instance }}
+{{- if $instance.service }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
+  labels:
+    backup.component.name: {{ $.Release.Name }}
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+{{- with $instance.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  type: {{ ($instance.service).type | default "ClusterIP" }}
+  ports:
+    {{- if $instance.service.http }}
+    - name: http
+      port: {{ $instance.service.http.port }}
+      protocol: TCP
+      {{- if $instance.service.http.nodePort }}
+      nodePort: {{ $instance.service.http.nodePort }}
+      {{- end }}
+    {{- end}}
+    {{- if $instance.service.https }}
+    - name: https
+      port: {{ $instance.service.https.port }}
+      protocol: TCP
+      {{- if $instance.service.https.nodePort }}
+      nodePort: {{ $instance.service.https.nodePort }}
+      {{- end }}
+    {{- end}}
+
+  selector:
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+{{- if $instance.service.loadBalancerIP }}
+  loadBalancerIP: {{ $instance.service.loadBalancerIP }}
+{{- end }}
+{{- if $instance.sessionReplication }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: 'true'
+  labels:
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+spec:
+  ports:
+    {{- if $instance.service.http }}
+    - name: http
+      port: {{ $instance.service.http.port }}
+      protocol: TCP
+      {{- if $instance.service.http.nodePort }}
+      nodePort: {{ $instance.service.http.nodePort }}
+      {{- end }}
+    {{- end}}
+    {{- if $instance.service.https }}
+    - name: https
+      protocol: TCP
+      port: {{ $instance.service.https.port }}
+      targetPort: {{ $instance.service.https.port }}
+    {{- end}}
+  selector:
+    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  {{- end }}
+---
+{{- end }}
+{{- range $j, $item := $instance.services }}
+{{- toYaml $item | nindent 0 }}
+---
+{{- end }}
+{{ end }}
