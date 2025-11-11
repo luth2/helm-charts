@@ -69,6 +69,15 @@ entries:
   ecp-endpoint:
   - apiVersion: v1
     appVersion: "1.0"
+    created: "2025-11-11T18:58:55.027250283Z"
+    description: A Helm chart for Kubernetes
+    digest: c2502f5d8739601f1a435f56cfcc17eac522ebff98b5f0668eddbd5e65d19a6c
+    name: ecp-endpoint
+    urls:
+    - ecp-endpoint-4.17.0.tgz
+    version: 4.17.0
+  - apiVersion: v1
+    appVersion: "1.0"
     created: "2025-06-15T17:38:55.881450964Z"
     description: A Helm chart for Kubernetes
     digest: bd7e6b534b1aab4cd62571d4595774fb3ea9007e64697a0428432c3493c6a2e9
@@ -76,4 +85,4 @@ entries:
     urls:
     - ecp-endpoint-4.16.0.tgz
     version: 4.16.0
-generated: "2025-11-11T18:00:52.808342757Z"
+generated: "2025-11-11T18:58:55.027265431Z"
