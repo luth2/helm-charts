@@ -6,4 +6,4 @@ version: 4.17.0
 
 maintainers:
   - name: Amprion ECP
-    email: ecp-maintenance@amprion.net
+#    email: ecp-maintenance@amprion.net
