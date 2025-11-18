@@ -2,11 +2,11 @@
 
 # config for eccosp-artemis
 instance:  # array of ECCoSP Artemis instances - one values file can hold multiple instances
-  - name: artemis-eptb1 # name of kubernetes instance
+  - name: artemis-eptb1  # name of kubernetes instance
     image:  # section for information about Docker image
-      name: entsoe/eccosp-artemis # URL to docker image.
+      name: entsoe/eccosp-artemis  # URL to docker image.
       tag: 4.17.0  # Docker image tag - version or 'latest'
-#      pullPolicy: IfNotPresent # Pull policy specifies when the image should be pulled, it is possible to use 'Always' so on every pod (re)start is pulled
+#      pullPolicy: IfNotPresent  # Pull policy specifies when the image should be pulled, it is possible to use 'Always' so on every pod (re)start is pulled
     replicaCount: 1  # number of replicas - ECCoSP Artemis cluster
     resourcesK8s:  # section for CPU and memory specification
       requests:  # minimum guaranteed amount of a resource that is reserved for a container
@@ -65,98 +65,98 @@ instance:  # array of ECCoSP Artemis instances - one values file can hold multip
 
     # The naming convention for configuration files name and parameters is camelCase instead of 'dot case format'.
     # Mapping of Helm values to ECCoSP Artemis configuration file is available in config map ./eccosp-artemis/templates/configMap.yaml
-    brokerXml: # stands for broker.xml file
-      default: # parent for default Artemis configuration
-        ecpComponentCode: artemis-eptb1 # Artemis identification code in ECP network (EIC) for Audit logging
-#        componentType: # Artemis component type ie. ECCo SP Artemis Internal Broker for Audit logging
-#        artemisName: # Artemis name, value is shown in GUI
-#        diskScanPeriod: # disk-scan-period
-#        diskMaxUsage: # max-disk-usage
-#        pageSyncTimeout: # page-sync-timeout
-#        globalMaxSize: # global-max-size
-#        globalMaxMessages: # global-max-messages
-#        maskPassword: # mask-password
-#        codec: # password-codec
-#        algorithm: # jasypt.encryptor.algorithm
-#        key: # artemis.jasypt.sensitive.string.codec.key
+    brokerXml:  # stands for broker.xml file
+      default:  # parent for default Artemis configuration
+        ecpComponentCode: artemis-eptb1  # Artemis identification code in ECP network (EIC) for Audit logging
+#        componentType:  # Artemis component type ie. ECCo SP Artemis Internal Broker for Audit logging
+#        artemisName:  # Artemis name, value is shown in GUI
+#        diskScanPeriod:  # disk-scan-period
+#        diskMaxUsage:  # max-disk-usage
+#        pageSyncTimeout:  # page-sync-timeout
+#        globalMaxSize:  # global-max-size
+#        globalMaxMessages:  # global-max-messages
+#        maskPassword:  # mask-password
+#        codec:  # password-codec
+#        algorithm:  # jasypt.encryptor.algorithm
+#        key:  # artemis.jasypt.sensitive.string.codec.key
 
-#      journal: # parent for Artemis journal configuration
-#        persistenceEnabled: # persistence-enabled
-#        maxRedeliveryRecords: # max-redelivery-records
-#        type: # journal-type
-#        dataSync: # journal-datasync
-#        minFiles: # journal-min-files
-#        poolFiles: # journal-pool-files
-#        deviceBlockSize: # journal-device-block-size
-#        fileSize: # journal-file-size
-#        bufferTimeout: # journal-buffer-timeout
-#        maxIO: # journal-max-io
-#        pagingDirectory: # paging-directory
-#        bindingsDirectory: # bindings-directory
-#        journalDirectory: # journal-directory
-#        largeMessagesDirectory: # large-messages-directory
+#      journal:  # parent for Artemis journal configuration
+#        persistenceEnabled:  # persistence-enabled
+#        maxRedeliveryRecords:  # max-redelivery-records
+#        type:  # journal-type
+#        dataSync:  # journal-datasync
+#        minFiles:  # journal-min-files
+#        poolFiles:  # journal-pool-files
+#        deviceBlockSize:  # journal-device-block-size
+#        fileSize:  # journal-file-size
+#        bufferTimeout:  # journal-buffer-timeout
+#        maxIO:  # journal-max-io
+#        pagingDirectory:  # paging-directory
+#        bindingsDirectory:  # bindings-directory
+#        journalDirectory:  # journal-directory
+#        largeMessagesDirectory:  # large-messages-directory
 
-#      criticalAnalyzer: # parent for Artemis critical analyzer configuration
-#        enabled: # critical-analyzer
-#        timeout: # critical-analyzer-timeout
-#        checkPeriod: # critical-analyzer-check-period
-#        policy: # critical-analyzer-policy
+#      criticalAnalyzer:  # parent for Artemis critical analyzer configuration
+#        enabled:  # critical-analyzer
+#        timeout:  # critical-analyzer-timeout
+#        checkPeriod:  # critical-analyzer-check-period
+#        policy:  # critical-analyzer-policy
 
-#      acceptor: # configuration of Artemis AMQP acceptor
-#        ip: # IP where Artemis is listening on
-#        port: # port where Artemis is listening on
-#        protocols: # protocols
-#        enabledProtocols: # enabledProtocols
-#        enabledCipherSuites: # enabledCipherSuites
-#        properties: # parent for acceptor attributes/values configuration
-#          - parameterName: # name of acceptor attribute
-#            value: # value of acceptor attribute
-#          - parameterName: # name of acceptor attribute
-#            value: # value of acceptor attribute
+#      acceptor:  # configuration of Artemis AMQP acceptor
+#        ip:  # IP where Artemis is listening on
+#        port:  # port where Artemis is listening on
+#        protocols:  # protocols
+#        enabledProtocols:  # enabledProtocols
+#        enabledCipherSuites:  # enabledCipherSuites
+#        properties:  # parent for acceptor attributes/values configuration
+#          - parameterName:  # name of acceptor attribute
+#            value:  # value of acceptor attribute
+#          - parameterName:  # name of acceptor attribute
+#            value:  # value of acceptor attribute
 
-      addressSettings: # parent for Artemis address settings configuration
-        defaultConfigurationEnabled: true # if true, default address settings configuration is enabled
-#        match: # possibility to add configuration parameters
-#          - ecp.queue.receive: # queue name, wildcard, you want to configure
-#            - parameterName: "page-size-bytes" # name of queue attribute
-#              value: "10M" # value of queue attribute
-#          - ecp.queue.send: # queue name, wildcard, you want to configure
-#            - parameterName: "page-size-bytes" # name of queue attribute
-#              value: "20M" # value of queue attribute
+      addressSettings:  # parent for Artemis address settings configuration
+        defaultConfigurationEnabled: true  # if true, default address settings configuration is enabled
+#        match:  # possibility to add configuration parameters
+#          - ecp.queue.receive:  # queue name, wildcard, you want to configure
+#            - parameterName: "page-size-bytes"  # name of queue attribute
+#              value: "10M"  # value of queue attribute
+#          - ecp.queue.send:  # queue name, wildcard, you want to configure
+#            - parameterName: "page-size-bytes"  # name of queue attribute
+#              value: "20M"  # value of queue attribute
 # Artemis HA is configured via Shared Store approach. First node in the cluster, is always selected as master. Any other nodes are selected as backups/slaves. Details for internal communication are filled in automatically during deployment.
-#      highAvailability: # parent for Artemis HA configuration
-#        user: eccosp-artemis # HA cluster user
-#        password: eccosp-artemis-cluster-password # HA cluster password
-#        connectionName: ha-cluster # HA connection name
-#        acceptor: # parent for Artemis HA configuration acceptor
-#          ip: 0.0.0.0 # IP where Artemis HA acceptor is listening on
-#          port: 61616 # port where Artemis HA acceptor is listening on
-#          tcpSendBufferSize: # tcpSendBufferSize
-#          tcpReceiveBufferSize: # tcpReceiveBufferSize
-#          protocols: # protocols
-#          enabledProtocols: # enabledProtocols
-#          enabledCipherSuites: # enabledCipherSuites
-#          properties: # parent for acceptor attributes/values configuration
-#            - parameterName: # name of acceptor attribute
-#              value: # value of acceptor attribute
-#            - parameterName: # name of acceptor attribute
-#              value: # value of acceptor attribute
+#      highAvailability:  # parent for Artemis HA configuration
+#        user: eccosp-artemis  # HA cluster user
+#        password: eccosp-artemis-cluster-password  # HA cluster password
+#        connectionName: ha-cluster  # HA connection name
+#        acceptor:  # parent for Artemis HA configuration acceptor
+#          ip: 0.0.0.0  # IP where Artemis HA acceptor is listening on
+#          port: 61616  # port where Artemis HA acceptor is listening on
+#          tcpSendBufferSize:  # tcpSendBufferSize
+#          tcpReceiveBufferSize:  # tcpReceiveBufferSize
+#          protocols:  # protocols
+#          enabledProtocols:  # enabledProtocols
+#          enabledCipherSuites:  # enabledCipherSuites
+#          properties:  # parent for acceptor attributes/values configuration
+#            - parameterName:  # name of acceptor attribute
+#              value:  # value of acceptor attribute
+#            - parameterName:  # name of acceptor attribute
+#              value:  # value of acceptor attribute
     env:  # stands for env file
-#      heapDumpPath: # path to java heap dump file
-      resourcesJvm: # memory allocation for Artemis component
-        xms: 128M # lower bound of java heap memory size
-        xmx: 4G # upper bound of java heap memory size
+#      heapDumpPath:  # path to java heap dump file
+      resourcesJvm:  # memory allocation for Artemis component
+        xms: 128M  # lower bound of java heap memory size
+        xmx: 4G  # upper bound of java heap memory size
 
-    artemisUsers: # artemis-users.properties
-      - login: endpoint # username for Artemis console
-        password: password # password for Artemis console
-      - login: toolbox # username for Artemis console
-        password: password # password for Artemis console
+    artemisUsers:  # artemis-users.properties
+      - login: endpoint  # username for Artemis console
+        password: password  # password for Artemis console
+      - login: toolbox  # username for Artemis console
+        password: password  # password for Artemis console
 
 #    volumeMounts:  # volume mounts - can be used for mapping config files or storages
 #      - name: config  # name of volume mounts for config
 #        subPath: login.config  # name of configuration file
-#        mountPath: /opt/eccosp-artemis/etc/login.config # path where config file will be mounted
+#        mountPath: /opt/eccosp-artemis/etc/login.config  # path where config file will be mounted
 
 #    configMap: # config maps array
 #      - subPath: login.config # name of config file/volume mount
