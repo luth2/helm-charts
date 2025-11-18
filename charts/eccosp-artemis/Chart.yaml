@@ -4,6 +4,6 @@ description: A Helm chart for Kubernetes
 name: eccosp-artemis
 version: 4.17.0
 maintainers:
-  - name: "Amprion ECP"
+  - name: "AmprionECP"
     email: "ecp-maintainers@amprion.net"
     url: "https://www.amprion.net/"
