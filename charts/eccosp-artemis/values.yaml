@@ -1,67 +1,67 @@
 # The commented parameters have default values but these defaults can be overridden when enabled
 
 # config for eccosp-artemis
-instance: # array of ECCoSP Artemis instances - one values file can hold multiple instances
+instance:  # array of ECCoSP Artemis instances - one values file can hold multiple instances
   - name: artemis-eptb1 # name of kubernetes instance
-    image: # section for information about Docker image
+    image:  # section for information about Docker image
       name: entsoe/eccosp-artemis # URL to docker image.
-      tag: 4.17.0 # Docker image tag - version or 'latest'
+      tag: 4.17.0  # Docker image tag - version or 'latest'
 #      pullPolicy: IfNotPresent # Pull policy specifies when the image should be pulled, it is possible to use 'Always' so on every pod (re)start is pulled
-    replicaCount: 1 # number of replicas - ECCoSP Artemis cluster
-    resourcesK8s: # section for CPU and memory specification
-      requests: # minimum guaranteed amount of a resource that is reserved for a container
-        cpu: 500m # minimum CPU - one CPU = 1000m or 1
-        ephemeralStorage: 256Mi # minimum ephemeral storage for application
-        memory: 1Gi # minimum memory for container - 1Gi is equal to 1024 Mi
-      limits: # maximum amount of a resource to be used by a container. Should be always higher than application can allocate (xmx)
-        cpu: 1000m # maximum CPU
-        memory: 5Gi # maximum memory for container - 5Gi is equal to 5120 Mi
+    replicaCount: 1  # number of replicas - ECCoSP Artemis cluster
+    resourcesK8s:  # section for CPU and memory specification
+      requests:  # minimum guaranteed amount of a resource that is reserved for a container
+        cpu: 500m  # minimum CPU - one CPU = 1000m or 1
+        ephemeralStorage: 256Mi  # minimum ephemeral storage for application
+        memory: 1Gi  # minimum memory for container - 1Gi is equal to 1024 Mi
+      limits:  # maximum amount of a resource to be used by a container. Should be always higher than application can allocate (xmx)
+        cpu: 1000m  # maximum CPU
+        memory: 5Gi  # maximum memory for container - 5Gi is equal to 5120 Mi
 
-    storageData: 1Gi # certificates # storage certificates.
-    storageLogs: 256Mi # logs # storage for logs
-    sharedStorageSize: 100Mi # if SharedStorage for artemis is used, this amount of storage will be requested
-    sharedStorageSizeJournal: 100Mi # if SharedStorage for artemis journal is used, this amount of storage will be requested
-    sharedStorageClass: nfs-client # if SharedStorage for artemis is used, this storage class will be used to allocate shared storage resources
-    sharedStorageClassJournal: nfs-client # if SharedStorage for artemis journal is used, this storage class will be used to allocate shared storage resources
-    #sharedStorageAccessMode: ReadWriteMany # sharedStorageAccessMode class
-    #storageLogsSize: 64Mi # size of logs storage
-    keepLogsAfterRestart: false # boolean flag - indicates if Artemis logs are persisted after pod restart, default value false
-    livenessProbe: # automatic restart if pod is not in health state, default value false
-      enabled: false # Boolean flag – enables or disables the liveness probe
-#      initialDelaySeconds: 120 # Delay (in seconds) before the liveness probe starts after container startup
-#      periodSeconds: 60 # Interval (in seconds) between probe executions
-    readinessProbe: # Artemis pod will not be started before readiness probe is fulfilled
-      enabled: true # Boolean flag – enables or disables the readiness probe
-#      initialDelaySeconds: 120 # Delay (in seconds) before the readiness probe starts after container startup
-#      periodSeconds: 60 # Interval (in seconds) between probe executions
-    useSharedStorageForConfiguration: false # if enabled, all replicas of this pod will use shared storage for configs and certificates
-    useSharedStorageForJournal: true # if enabled, all replicas of this pod will use shared storage for journal
-    prometheusEnabled: true #boolean flag - indicates if Prometheus metrics is enabled
+    storageData: 1Gi  # certificates # storage certificates.
+    storageLogs: 256Mi  # logs # storage for logs
+    sharedStorageSize: 100Mi  # if SharedStorage for artemis is used, this amount of storage will be requested
+    sharedStorageSizeJournal: 100Mi  # if SharedStorage for artemis journal is used, this amount of storage will be requested
+    sharedStorageClass: nfs-client  # if SharedStorage for artemis is used, this storage class will be used to allocate shared storage resources
+    sharedStorageClassJournal: nfs-client  # if SharedStorage for artemis journal is used, this storage class will be used to allocate shared storage resources
+    #sharedStorageAccessMode: ReadWriteMany  # sharedStorageAccessMode class
+    #storageLogsSize: 64Mi  # size of logs storage
+    keepLogsAfterRestart: false  # boolean flag - indicates if Artemis logs are persisted after pod restart, default value false
+    livenessProbe:  # automatic restart if pod is not in health state, default value false
+      enabled: false  # Boolean flag – enables or disables the liveness probe
+#      initialDelaySeconds: 120  # Delay (in seconds) before the liveness probe starts after container startup
+#      periodSeconds: 60  # Interval (in seconds) between probe executions
+    readinessProbe:  # Artemis pod will not be started before readiness probe is fulfilled
+      enabled: true  # Boolean flag – enables or disables the readiness probe
+#      initialDelaySeconds: 120  # Delay (in seconds) before the readiness probe starts after container startup
+#      periodSeconds: 60  # Interval (in seconds) between probe executions
+    useSharedStorageForConfiguration: false  # if enabled, all replicas of this pod will use shared storage for configs and certificates
+    useSharedStorageForJournal: true  # if enabled, all replicas of this pod will use shared storage for journal
+    prometheusEnabled: true  # boolean flag - indicates if Prometheus metrics is enabled
 
     artemisKeystoreLocation: /opt/eccosp-artemis/etc/keystore.jks
     artemisKeystorePassword: password
 
-    service: # section for definition of services exposed within kubernetes environment
-#      type: NodePort # Type of the network service - NodePort/LoadBalancer/ClusterIP
-#      http: # protocol used for accessing GUI - can be http or https
-#        port: 8162 # port used for exposing HTTP(S) service
-      https: # protocol used for accessing GUI - can be http or https
-        port: 8161 # port used for exposing HTTP(S) service
+    service:  # section for definition of services exposed within kubernetes environment
+#      type: NodePort  # Type of the network service - NodePort/LoadBalancer/ClusterIP
+#      http:  # protocol used for accessing GUI - can be http or https
+#        port: 8162  # port used for exposing HTTP(S) service
+      https:  # protocol used for accessing GUI - can be http or https
+        port: 8161  # port used for exposing HTTP(S) service
 #        nodePort: 30161  # port used for exposing HTTP(S) service as for external access. Range - 30000-32767
-      amqps: # protocol used for connection on AMQP interface of Artemis - can be AMQP or AMQPS
-        port: 5672 # port used for exposing AMQP(S) service
+      amqps:  # protocol used for connection on AMQP interface of Artemis - can be AMQP or AMQPS
+        port: 5672  # port used for exposing AMQP(S) service
 #        nodePort: 30672  # port used for exposing AMQP(S) service as for external access. Range - 30000-32767
-    ingress: # an object that allows access to Kubernetes services from outside the Kubernetes cluster.
-      enabled: false # boolean flag for enable/disable ingress, default value false
-#      apiVersion: networking.k8s.io/v1 # Specifies the api version of ingress resource
-#      contextPath: / # context path for ingress, default value '/'
-#      host: eccosp-artemis.eptb1.eccosp # URL on which the ECCoSP Artemis is exposed. Address needs to be aligned with hosting.
-#      tls: # section for TLS definition for HTTPS connection to ingress
+    ingress:  # an object that allows access to Kubernetes services from outside the Kubernetes cluster.
+      enabled: false  # boolean flag for enable/disable ingress, default value false
+#      apiVersion: networking.k8s.io/v1  # Specifies the api version of ingress resource
+#      contextPath: /  # context path for ingress, default value '/'
+#      host: eccosp-artemis.eptb1.eccosp  # URL on which the ECCoSP Artemis is exposed. Address needs to be aligned with hosting.
+#      tls:  # section for TLS definition for HTTPS connection to ingress
 #        secretName: tls-secret  # secret where TLS certificate is stored
 #      ingressClassName: nginx  # ingress class - use nginx
-#      annotations: # ingress annotations section
-#        nginx.ingress.kubernetes.io/backend-protocol: "HTTPS" # important for remote host tunelling
-#        nginx.ingress.kubernetes.io/ssl-passthrough: 'true' # important for remote host tunelling
+#      annotations:  # ingress annotations section
+#        nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"  # important for remote host tunelling
+#        nginx.ingress.kubernetes.io/ssl-passthrough: 'true'  # important for remote host tunelling
 
     # The naming convention for configuration files name and parameters is camelCase instead of 'dot case format'.
     # Mapping of Helm values to ECCoSP Artemis configuration file is available in config map ./eccosp-artemis/templates/configMap.yaml
