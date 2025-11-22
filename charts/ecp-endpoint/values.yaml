@@ -1,5 +1,5 @@
 ### ECP Endpoint Chart ###
-  
+
 instance:  # array of ECP endpoint instances - one values file can hold multiple instances
   - name: ep1  # name of kubernetes instance
     image:  # section for information about Docker image
@@ -51,7 +51,7 @@ instance:  # array of ECP endpoint instances - one values file can hold multiple
       dataDirectory: /var/lib/ecp-endpoint  # dataDirectory config parameter for storage of persistent data
 
       ecpKeystoreLocation: /var/lib/ecp-endpoint/keystore.jks  # ecp.keystore.location
-      ecpKeystorePassword: password # password for the keystore.jks  # ecp.keystore.password
+      ecpKeystorePassword: password  # password for the keystore.jks  # ecp.keystore.password
 
       ecpAuthKeystoreLocation: /var/lib/ecp-endpoint/authKeystore.jks  #  ecp.authKeystore.location
       ecpAuthKeystorePassword: password  # ecp.authKeystore.password
