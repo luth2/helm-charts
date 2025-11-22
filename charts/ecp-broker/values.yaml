@@ -23,8 +23,8 @@ instance:  # array of ECP broker instances - one values file can hold multiple i
     sharedStorageSizeJournal: 100Mi  # if SharedStorage for brokers journal is used, this amount of storage will be requested
     sharedStorageClass: nfs-client  # if SharedStorage for brokers is used, this storage class will be used to allocate shared storage resources
     sharedStorageClassJournal: nfs-client  # if SharedStorage for brokers journal is used, this storage class will be used to allocate shared storage resources
-    #sharedStorageAccessMode: ReadWriteMany  # sharedStorageAccessMode class
-    #storageLogsSize: 64Mi  # size of logs storage
+#    sharedStorageAccessMode: ReadWriteMany  # sharedStorageAccessMode class
+#    storageLogsSize: 64Mi  # size of logs storage
     keepLogsAfterRestart: false  # boolean flag - indicates if ECP logs are persisted after pod restart, default value false
     livenessProbe:  # automatic restart if pod is not in health state, default value false
       enabled: false  # Boolean flag – enables or disables the liveness probe
@@ -170,47 +170,47 @@ instance:  # array of ECP broker instances - one values file can hold multiple i
 #          - parameterName: # name of acceptor attribute
 #            value: # value of acceptor attribute
 
-      addressSettings: # parent for Artemis address settings configuration
-        defaultConfigurationEnabled: true # if true, default address settings configuration is enabled
-#        match: # possibility to add configuration parameters
-#          - ecp.queue.receive: # queue name, wildcard, you want to configure
-#            - parameterName: "page-size-bytes" # name of queue attribute
-#              value: "10M" # value of queue attribute
-#          - ecp.queue.send: # queue name, wildcard, you want to configure
-#            - parameterName: "page-size-bytes" # name of queue attribute
-#              value: "20M" # value of queue attribute
+      addressSettings:  # parent for Artemis address settings configuration
+        defaultConfigurationEnabled: true  # if true, default address settings configuration is enabled
+#        match:  # possibility to add configuration parameters
+#          - ecp.queue.receive:  # queue name, wildcard, you want to configure
+#            - parameterName: "page-size-bytes"  # name of queue attribute
+#              value: "10M"  # value of queue attribute
+#          - ecp.queue.send:  # queue name, wildcard, you want to configure
+#            - parameterName: "page-size-bytes"  # name of queue attribute
+#              value: "20M"  # value of queue attribute
 # Artemis HA is configured via Shared Store approach. First node in the cluster, is always selected as master. Any other nodes are selected as backups/slaves. Details for internal communication are filled in automatically during deployment.
-#      highAvailability: # parent for Artemis HA configuration
-#        user: eccosp-artemis # HA cluster user
-#        password: eccosp-artemis-cluster-password # HA cluster password
-#        connectionName: ha-cluster # HA connection name
-#        acceptor: # parent for Artemis HA configuration acceptor
-#          ip: 0.0.0.0 # IP where Artemis HA acceptor is listening on
-#          port: 61616 # port where Artemis HA acceptor is listening on
+#      highAvailability:  # parent for Artemis HA configuration
+#        user: eccosp-artemis  # HA cluster user
+#        password: eccosp-artemis-cluster-password  # HA cluster password
+#        connectionName: ha-cluster  # HA connection name
+#        acceptor:  # parent for Artemis HA configuration acceptor
+#          ip: 0.0.0.0  # IP where Artemis HA acceptor is listening on
+#          port: 61616  # port where Artemis HA acceptor is listening on
 #          tcpSendBufferSize:
 #          tcpReceiveBufferSize:
 #          protocols:
 #          enabledProtocols:
 #          enabledCipherSuites:
-#          properties: # parent for acceptor attributes/values configuration
-#            - parameterName: # name of acceptor attribute
-#              value: # value of acceptor attribute
-#            - parameterName: # name of acceptor attribute
-#              value: # value of acceptor attribute
+#          properties:  # parent for acceptor attributes/values configuration
+#            - parameterName:   # name of acceptor attribute
+#              value:  # value of acceptor attribute
+#            - parameterName:  # name of acceptor attribute
+#              value:  # value of acceptor attribute
     env:  # stands for env file
-#      heapDumpPath: # path to java heap dump file
-      resourcesJvm: # memory allocation for Artemis component
-        xms: 128M # lower bound of java heap memory size
-        xmx: 4G # upper bound of java heap memory size
+#      heapDumpPath:  # path to java heap dump file
+      resourcesJvm:  # memory allocation for Artemis component
+        xms: 128M  # lower bound of java heap memory size
+        xmx: 4G  # upper bound of java heap memory size
 
 #    volumeMounts:  # volume mounts - can be used for mapping config files or storages
 #      - name: config  # name of volume mounts for config
 #        subPath: login.config  # name of configuration file
 #        mountPath: /opt/ecp-broker/broker/etc/login.config # path where config file will be mounted
 
-#    configMap: # config maps array
-#      - subPath: ecp-config.xml # name of config file/volume mount
-#        content: |- # content is shifted by two spaces
+#    configMap:  # config maps array
+#      - subPath: ecp-config.xml  # name of config file/volume mount
+#        content: |-  # content is shifted by two spaces
 #          /*
 #            * Licensed to the Apache Software Foundation (ASF) under one or more
 #            * contributor license agreements.  See the NOTICE file distributed with
@@ -239,19 +239,19 @@ instance:  # array of ECP broker instances - one values file can hold multiple i
 # See ECP Kubernetes Guide, Shared Folder Configuration – Custom Volume Mounts
 #    volumeClaimTemplates:
 #      - metadata:
-#          name: cd # volume name
+#          name: cd  # volume name
 #        spec:
-#          accessModes: [ "ReadWriteMany" ] # storage of type ReadWriteMany
-#          storageClassName: nfs-storage # name of storage class - needs to be provided by Kubernetes administrator
+#          accessModes: [ "ReadWriteMany" ]  # storage of type ReadWriteMany
+#          storageClassName: nfs-storage  # name of storage class - needs to be provided by Kubernetes administrator
 #          resources:
 #            requests:
-#              storage: 512Mi # request for storage size
+#              storage: 512Mi  # request for storage size
 
 # global config
 global:
-  storage: # storage section
-    class: standard # storage class – needs to be provided by Kubernetes cluster administrator
-  imagePullSecrets: # secrets which hold information about login to docker repository
-    - name: regcred # name of secret – name is defined by Kubernetes cluster administrator
+  storage:  # storage section
+    class: standard  # storage class – needs to be provided by Kubernetes cluster administrator
+  imagePullSecrets:  # secrets which hold information about login to docker repository
+    - name: regcred  # name of secret – name is defined by Kubernetes cluster administrator
   imageBusybox:
-    name: busybox # URL for busybox image pull - used for ECP side containers - e.g. file permission fix
+    name: busybox  # URL for busybox image pull - used for ECP side containers - e.g. file permission fix
