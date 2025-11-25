@@ -13,6 +13,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
 {{- end }}
 spec:
+  ingressClassName: {{ $instance.ingress.ingressClassName }}
 {{- if $instance.ingress.tls }}
   tls:
     - hosts:
