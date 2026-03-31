@@ -76,6 +76,53 @@ jobs:
           upload-artifact: true
           artifact-name: eccosp-base-sbom
 
+      - name: Debug SBOM file
+        run: |
+          set -euo pipefail
+          echo "Working directory: $PWD"
+          ls -lah
+          test -f eccosp-base-sbom.spdx.json
+          echo "SBOM file details:"
+          ls -lh eccosp-base-sbom.spdx.json
+          echo "SBOM checksum:"
+          sha256sum eccosp-base-sbom.spdx.json
+
+      - name: Preview SBOM content
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("eccosp-base-sbom.spdx.json")
+          data = json.loads(path.read_text())
+
+          print("Top-level keys:", sorted(data.keys()))
+          print("SPDX ID:", data.get("SPDXID"))
+          print("Document name:", data.get("name"))
+          print("Document namespace:", data.get("documentNamespace"))
+
+          packages = data.get("packages", [])
+          relationships = data.get("relationships", [])
+          print("Package count:", len(packages))
+          print("Relationship count:", len(relationships))
+
+          for index, package in enumerate(packages[:20], start=1):
+              print(f"Package {index}: {package.get('name')} {package.get('versionInfo')}")
+          PY
+
+      - name: Upload raw SBOM preview to job summary
+        run: |
+          {
+            echo "## SBOM Debug"
+            echo
+            echo "File: eccosp-base-sbom.spdx.json"
+            echo
+            echo '```json'
+            python -m json.tool eccosp-base-sbom.spdx.json | sed -n '1,160p'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Submit SBOM to dependency graph
         uses: advanced-security/spdx-dependency-submission-action@v0.2.0
         with:
