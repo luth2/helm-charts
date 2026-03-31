@@ -12,6 +12,18 @@ Das Image bildet nur die gemeinsamen Voraussetzungen ab:
 - TLS- und Zertifikatsbasis ueber `ca-certificates` und `openssl`
 - keine vorab erzeugten ECCo-SP-Laufzeitverzeichnisse
 
+## Eingebaute Basis-Haertung
+
+Das Base-Image bleibt bewusst einfach, bringt aber bereits einige sinnvolle Grundhaertungen mit:
+
+- Paketinstallation ohne Weak Dependencies
+- Paketinstallation ohne Dokumentationsballast
+- Bereinigung von Paket- und Temp-Caches nach dem Build
+- Aktualisierung des CA-Trust-Stores
+- Anpassung der Java-`securerandom`-Quelle auf `urandom`
+
+Nicht enthalten sind bewusst haertere Einschraenkungen wie ein finaler Non-Root-User oder readonly Laufzeitannahmen, weil die spaeteren RPM-Installationen und die Komponentenskripte das je nach Komponente unterschiedlich erwarten koennen.
+
 ## Warum nicht Distroless
 
 Die aktuelle ECCo-SP-Struktur erwartet an mehreren Stellen Shell-, Bash- und Startskript-Verhalten. Dazu kommen Tomcat- und Artemis-nahe Konfigurationen. Deshalb ist ein kleines, aber nicht distroless Base-Image fuer den ersten Schritt die robustere Wahl.
