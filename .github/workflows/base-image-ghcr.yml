@@ -76,6 +76,28 @@ jobs:
           set -euo pipefail
           echo "ref=${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
+      - name: Add build summary
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect --raw "${{ steps.image_ref.outputs.ref }}" > image-manifest.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path("image-manifest.json").read_text())
+          total_size = manifest.get("config", {}).get("size", 0)
+          total_size += sum(layer.get("size", 0) for layer in manifest.get("layers", []))
+          total_size_mb = total_size / (1024 * 1024)
+
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a", encoding="utf-8") as handle:
+              handle.write("## Build Summary\n\n")
+              handle.write(f"- Image: `${{ steps.image_ref.outputs.ref }}`\n")
+              handle.write(f"- Digest: `${{ steps.build.outputs.digest }}`\n")
+              handle.write(f"- Approx. compressed image size: `{total_size_mb:.2f} MiB`\n")
+          PY
+
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
