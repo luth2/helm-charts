@@ -21,7 +21,7 @@ jobs:
   build-push-scan:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
       security-events: write
 
@@ -74,6 +74,11 @@ jobs:
           output-file: eccosp-base-sbom.spdx.json
           upload-artifact: true
           artifact-name: eccosp-base-sbom
+
+      - name: Submit SBOM to dependency graph
+        uses: advanced-security/spdx-dependency-submission-action@v0.2.0
+        with:
+          filePath: eccosp-base-sbom.spdx.json
 
       - name: Scan image for CVEs
         uses: aquasecurity/trivy-action@v0.35.0
