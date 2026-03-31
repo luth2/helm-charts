@@ -21,22 +21,20 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     TZ=Etc/UTC
 
-RUN microdnf update -y --setopt=install_weak_deps=0 --nodocs \
-    && microdnf install -y --setopt=install_weak_deps=0 --nodocs \
+RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs \
         bash \
         ca-certificates \
         coreutils \
         findutils \
         grep \
         hostname \
-        java-21-openjdk \
+        java-21-openjdk-headless \
         openssl \
         procps-ng \
         sed \
         tzdata \
     && update-ca-trust \
-    && find /usr/lib/jvm -path '*/conf/security/java.security' -exec \
-        sed -i 's|^securerandom\.source=file:/dev/random|securerandom.source=file:/dev/urandom|' {} \; \
+    && find /usr/lib/jvm -path '*/conf/security/java.security' -print0 | xargs -0 -r sed -i 's|^securerandom\.source=file:/dev/random|securerandom.source=file:/dev/urandom|' \
     && chmod 0644 /etc/passwd /etc/group \
     && rm -rf /var/cache/dnf /var/cache/yum /tmp/* /var/tmp/* \
     && microdnf clean all
