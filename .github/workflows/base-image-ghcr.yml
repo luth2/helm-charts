@@ -7,6 +7,7 @@ on:
       - master
     paths:
       - Container/base-image/Dockerfile
+      - .github/workflows/base-image-ghcr.yml
 
 concurrency:
   group: base-image-ghcr-${{ github.ref }}
