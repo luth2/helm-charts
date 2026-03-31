@@ -20,9 +20,12 @@ env:
 
 jobs:
   build-push-scan:
+    outputs:
+      image_ref: ${{ steps.image_ref.outputs.ref }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
       packages: write
       security-events: write
 
@@ -67,78 +70,58 @@ jobs:
           sbom: false
           provenance: false
 
+      - name: Define immutable image reference
+        id: image_ref
+        run: |
+          set -euo pipefail
+          echo "ref=${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.IMAGE_REF_SHA }}
+          image: ${{ steps.image_ref.outputs.ref }}
           format: spdx-json
           output-file: eccosp-base-sbom.spdx.json
           upload-artifact: true
           artifact-name: eccosp-base-sbom
-
-      - name: Debug SBOM file
-        run: |
-          set -euo pipefail
-          echo "Working directory: $PWD"
-          ls -lah
-          test -f eccosp-base-sbom.spdx.json
-          echo "SBOM file details:"
-          ls -lh eccosp-base-sbom.spdx.json
-          echo "SBOM checksum:"
-          sha256sum eccosp-base-sbom.spdx.json
-
-      - name: Preview SBOM content
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path("eccosp-base-sbom.spdx.json")
-          data = json.loads(path.read_text())
-
-          print("Top-level keys:", sorted(data.keys()))
-          print("SPDX ID:", data.get("SPDXID"))
-          print("Document name:", data.get("name"))
-          print("Document namespace:", data.get("documentNamespace"))
-
-          packages = data.get("packages", [])
-          relationships = data.get("relationships", [])
-          print("Package count:", len(packages))
-          print("Relationship count:", len(relationships))
-
-          for index, package in enumerate(packages[:20], start=1):
-              print(f"Package {index}: {package.get('name')} {package.get('versionInfo')}")
-          PY
-
-      - name: Upload raw SBOM preview to job summary
-        run: |
-          {
-            echo "## SBOM Debug"
-            echo
-            echo "File: eccosp-base-sbom.spdx.json"
-            echo
-            echo '```json'
-            python -m json.tool eccosp-base-sbom.spdx.json | sed -n '1,160p'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Submit SBOM to dependency graph
         uses: advanced-security/spdx-dependency-submission-action@v0.2.0
         with:
           filePath: eccosp-base-sbom.spdx.json
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign container image
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${{ steps.image_ref.outputs.ref }}"
+
+      - name: Attest SBOM to GHCR image
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          set -euo pipefail
+          cosign attest --yes \
+            --predicate eccosp-base-sbom.spdx.json \
+            --type spdxjson \
+            "${{ steps.image_ref.outputs.ref }}"
+
       - name: Scan image for CVEs
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: ${{ env.IMAGE_REF_SHA }}
+          image-ref: ${{ steps.image_ref.outputs.ref }}
           format: sarif
           output: trivy-results.sarif
-          severity: CRITICAL,HIGH,MEDIUM
+          severity: CRITICAL,HIGH,MEDIUM,LOW
           ignore-unfixed: true
 
       - name: Upload CVE scan to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
+        if: always()
         with:
           sarif_file: trivy-results.sarif
 
@@ -148,3 +131,35 @@ jobs:
           name: eccosp-base-trivy-sarif
           path: trivy-results.sarif
           if-no-files-found: error
+
+  verify-supply-chain:
+    needs: build-push-scan
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: read
+
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Verify container signature
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/base-image-ghcr.yml@.*$" \
+            "${{ needs.build-push-scan.outputs.image_ref }}"
+
+      - name: Verify SBOM attestation
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          set -euo pipefail
+          cosign verify-attestation \
+            --type spdxjson \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/base-image-ghcr.yml@.*$" \
+            "${{ needs.build-push-scan.outputs.image_ref }}" >/dev/null
