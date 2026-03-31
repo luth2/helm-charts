@@ -24,7 +24,6 @@ ENV LANG=C.UTF-8 \
 RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs \
         bash \
         ca-certificates \
-        coreutils \
         findutils \
         grep \
         hostname \
