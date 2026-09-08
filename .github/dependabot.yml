@@ -16,3 +16,19 @@ updates:
       - "*"
   commit-message:
     prefix: ci
+- package-ecosystem: pip
+  directory: /.github/pages
+  schedule:
+    interval: weekly
+    day: monday
+    time: "08:00"
+    timezone: Europe/Berlin
+  assignees:
+  - luth2
+  open-pull-requests-limit: 5
+  groups:
+    documentation:
+      patterns:
+      - "*"
+  commit-message:
+    prefix: docs

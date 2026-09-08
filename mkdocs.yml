@@ -1,0 +1,73 @@
+site_name: ECCoSP | Helm Charts
+site_description: Helm charts, configuration and operations for ECCoSP components
+site_url: https://luth2.github.io/helm-charts/
+repo_url: https://github.com/luth2/helm-charts
+repo_name: luth2/helm-charts
+docs_dir: .ci-artifacts/pages/docs
+site_dir: .ci-artifacts/pages/site
+use_directory_urls: false
+theme:
+  name: material
+  language: en
+  font: false
+  palette:
+  - scheme: default
+    primary: teal
+    accent: cyan
+    toggle:
+      icon: material/weather-night
+      name: Switch to dark mode
+  - scheme: slate
+    primary: teal
+    accent: cyan
+    toggle:
+      icon: material/weather-sunny
+      name: Switch to light mode
+  features:
+  - navigation.tabs
+  - navigation.sections
+  - navigation.top
+  - search.suggest
+  - search.highlight
+  - content.code.copy
+plugins:
+- search
+markdown_extensions:
+- admonition
+- attr_list
+- md_in_html
+- pymdownx.details
+- pymdownx.superfences
+- pymdownx.highlight:
+    anchor_linenums: true
+- toc:
+    permalink: true
+extra_css:
+- assets/portal.css
+validation:
+  nav:
+    omitted_files: info
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+nav:
+- Home: index.md
+- Quickstart: Dokumentation/Helm_Repository.md
+- Charts:
+  - Catalog and versions: charts/index.md
+  - Endpoint: charts/ecp-endpoint/README.md
+  - Component Directory: charts/ecp-directory/README.md
+  - ECP Broker: charts/ecp-broker/README.md
+  - Artemis: charts/eccosp-artemis/README.md
+- Operations:
+  - Installation, Secrets and migration: Dokumentation/Helm_Charts.md
+  - Gateway API: Dokumentation/Gateway_API.md
+  - Pages and release process: Dokumentation/GitHub_Pages.md
+- Architecture:
+  - Overview and official sources: Dokumentation/README.md
+  - Endpoint: Dokumentation/Endpoint.md
+  - Component Directory: Dokumentation/Component_Directory.md
+  - ECP Broker: Dokumentation/Broker.md
+  - Internal broker: Dokumentation/Interner_Broker.md
+- Project: about.md

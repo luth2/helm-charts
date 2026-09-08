@@ -1,107 +1,107 @@
 # Broker
 
-Offizielle Quelle:
+Official source:
 
 - [Broker Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/broker-manual)
 - [ECCo SP Documents](https://eccosp-docs.entsoe.eu/k)
 
-## Zweck
+## Purpose
 
-Der Broker ist die zentrale Service-Provider-Komponente fuer den externen Nachrichtenaustausch im ECP-Netz. Er uebernimmt die eigentliche AMQP-basierte Zustellung zwischen Teilnehmern.
+The Broker is the central service provider component for external message exchange in the ECP network. It handles the actual AMQP-based delivery between participants.
 
-## Rolle im Gesamtsystem
+## Role in the Overall System
 
-Im Unterschied zum internen Broker ist der Broker fuer die netzweite Kommunikation zwischen Komponenten und Organisationen ausgelegt.
+Unlike the Internal Broker, the Broker is designed for network-wide communication between components and organizations.
 
-- Endpoints verbinden sich fuer den externen Nachrichtenaustausch mit dem Broker.
-- Die zulaessigen Kommunikationspartner und Berechtigungen orientieren sich an Informationen aus dem Component Directory.
-- Message Paths und Queue-Management sind zentrale Betriebsaspekte.
+- Endpoints connect to the Broker for external message exchange.
+- Permitted communication partners and permissions are based on information from the Component Directory.
+- Message Paths and queue management are key operational aspects.
 
-## Technischer Aufbau laut Doku
+## Technical Architecture According to the Documentation
 
-Die offizielle Dokumentation nennt zwei Kernkomponenten:
+The official documentation lists two core components:
 
-- einen AMQP-Broker auf Basis von ActiveMQ Artemis
-- ein benutzerdefiniertes Authentication- und Authorization-Plugin, das Sicherheitsinformationen aus dem Component Directory verwendet
+- An AMQP broker based on ActiveMQ Artemis
+- A custom authentication and authorization plugin that uses security information from the Component Directory
 
-## Betriebsrelevante Punkte
+## Operational Considerations
 
-- Der Broker steuert Queue-Management fuer die Nachrichtenvermittlung.
-- Authentifizierung und Autorisierung sind integraler Bestandteil des Betriebs.
-- Die Doku verweist zusaetzlich auf Themen wie lokale Component-Directory-Daten, Registrierung, Administration und Monitoring.
+- The Broker controls queue management for message delivery.
+- Authentication and authorization are integral to operation.
+- The documentation also covers topics such as local Component Directory data, registration, administration and monitoring.
 
-## Bezug zum Helm-Repository
+## Relationship to the Helm Repository
 
 - Chart: `charts/ecp-broker`
-- Beispiel-Values: `ecco-sp/values-ecp-broker-br.yaml`
+- Example values: `ecco-sp/values-ecp-broker-br.yaml`
 
-## Installationsanleitung auf VM
+## VM Installation Guide
 
-### Zielbild
+### Target Setup
 
-Der Broker laeuft als eigenstaendige Serverkomponente auf einer VM und stellt zwei wesentliche Schnittstellen bereit:
+The Broker runs as a standalone server component on a VM and provides two essential interfaces:
 
-- AMQPS fuer Endpoints auf Port 5671
-- HTTPS fuer Administration bzw. Konsole auf Port 8161
+- AMQPS for Endpoints on port 5671
+- HTTPS for administration or the console on port 8161
 
-Er verwendet Registrierungs- und Authentisierungsdaten aus dem Component Directory und kombiniert diese mit einer Artemis-Laufzeitinstanz.
+It uses registration and authentication data from the Component Directory and combines these with an Artemis runtime instance.
 
-### Voraussetzungen
+### Prerequisites
 
-- Linux-VM mit Java-Laufzeit entsprechend dem offiziellen Softwarepaket
-- Erreichbares Home Component Directory
-- Vorbereitete Registrierungsschluessel und spaeteres Auth-Keystore-Verfahren
-- Freigeschaltete Ports 5671 und 8161
-- Genug lokaler oder geteilter Speicher fuer Journal, Bindings und Paging
+- Linux VM with a Java runtime matching the official software package
+- Reachable Home Component Directory
+- Prepared registration keys and a process for the subsequent authentication keystore
+- Open ports 5671 and 8161
+- Sufficient local or shared storage for the journal, bindings and paging
 
-### Wichtige Verzeichnisse und Dateien
+### Important Directories and Files
 
-Aus der Repo-Konfiguration ergibt sich fuer eine klassische VM-Installation grob diese Struktur:
+The repository configuration suggests roughly the following structure for a traditional VM installation:
 
-- Installationsbasis unter `/opt/ecp-broker`
-- Laufzeitkonfiguration unter `/opt/ecp-broker/config`
-- Artemis-Instanz unter `/opt/ecp-broker/broker`
-- Lokaler Directory-Cache unter `/opt/ecp-broker/cd`
-- Hauptkonfiguration `broker.properties`
-- Artemis-Konfiguration `broker.xml`
-- Java-/Startprofil `artemis.profile`
-- Registrierungskeystore und Auth-Keystore im Konfigurationsbereich
+- Installation base under `/opt/ecp-broker`
+- Runtime configuration under `/opt/ecp-broker/config`
+- Artemis instance under `/opt/ecp-broker/broker`
+- Local directory cache under `/opt/ecp-broker/cd`
+- Main configuration `broker.properties`
+- Artemis configuration `broker.xml`
+- Java/startup profile `artemis.profile`
+- Registration keystore and authentication keystore in the configuration area
 
-### Installationsablauf
+### Installation Procedure
 
-1. Die VM mit Betriebssystem, Java und Systembenutzer vorbereiten.
-2. Das offizielle Broker-Paket installieren oder entpacken.
-3. Die Verzeichnisse fuer Konfiguration, Laufzeitdaten, Journal und Logs anlegen.
-4. `broker.properties` mit Component-Code, Kontaktinformationen, URLs und Home Component Directory konfigurieren.
-5. Registrierungskeystore einspielen und die Erstregistrierung gegen das Home Component Directory durchfuehren.
-6. Das dabei erzeugte Auth-Keystore sicher ablegen und in der Konfiguration referenzieren.
-7. `broker.xml` und `artemis.profile` fuer Ports, TLS, Journal und Speicherverbrauch anpassen.
-8. Den Broker als Systemdienst registrieren und starten.
+1. Prepare the VM with an operating system, Java and a system user.
+2. Install or extract the official Broker package.
+3. Create the directories for configuration, runtime data, the journal and logs.
+4. Configure `broker.properties` with the component code, contact information, URLs and Home Component Directory.
+5. Deploy the registration keystore and perform initial registration with the Home Component Directory.
+6. Store the resulting authentication keystore securely and reference it in the configuration.
+7. Adjust `broker.xml` and `artemis.profile` for ports, TLS, the journal and memory usage.
+8. Register the Broker as a system service and start it.
 
-### Inhaltlich wichtige Parameter
+### Key Configuration Parameters
 
-Bei einer VM-Installation sind insbesondere diese Werte entscheidend:
+The following values are particularly important for a VM installation:
 
 - `ecp.broker.urls`
 - `ecp.broker.code`
 - `ecp.directory.client.synchronization.homeComponentDirectoryPrimaryCode`
 - `ecp.directory.client.synchronization.homeComponentDirectoryPrimaryUrl`
-- `ecp.keystore.location` und `ecp.authKeystore.location`
-- TLS- und Acceptor-Konfiguration in `broker.xml`
-- Journal-, Paging- und Storage-Pfade der Artemis-Instanz
+- `ecp.keystore.location` and `ecp.authKeystore.location`
+- TLS and acceptor configuration in `broker.xml`
+- Journal, paging and storage paths of the Artemis instance
 
-### Validierung nach der Installation
+### Post-Installation Validation
 
-- HTTPS-Konsole auf Port 8161 pruefen
-- AMQPS-Erreichbarkeit auf Port 5671 pruefen
-- Synchronisation mit dem Component Directory pruefen
-- Testverbindung eines Endpoints inklusive Authentifizierung validieren
-- Queue-Erzeugung, Journal-Verhalten und Zertifikatsnutzung kontrollieren
+- Check the HTTPS console on port 8161
+- Check AMQPS reachability on port 5671
+- Check synchronization with the Component Directory
+- Validate a test connection from an Endpoint, including authentication
+- Check queue creation, journal behavior and certificate usage
 
-### Hinweis fuer die Installationsreihenfolge
+### Installation Order Note
 
-Auf VMs sollte der Broker nach dem Component Directory, aber vor den Endpoints in Betrieb gehen. Fuer HA-Szenarien sind Journal-Layout, Storage-Performance und Zertifikatsablage die kritischen Punkte.
+On VMs, the Broker should be brought into operation after the Component Directory but before the Endpoints. For HA scenarios, journal layout, storage performance and certificate storage are the critical factors.
 
-## Kurzfazit
+## Conclusion
 
-Der Broker ist die Schluesselkomponente fuer den gesicherten externen Transport. Wenn es um Queue-Verhalten, Sicherheitsrichtlinien, Teilnehmerzugriffe oder netzweite Kommunikation geht, ist diese Komponente massgeblich.
+The Broker is the key component for secure external transport. It is the primary component responsible for queue behavior, security policies, participant access and network-wide communication.

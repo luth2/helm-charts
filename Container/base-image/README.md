@@ -1,54 +1,53 @@
 # ECCo SP Base Image
 
-Dieses Base-Image ist als gemeinsamer Startpunkt fuer spaetere ECCo-SP-Komponentenimages gedacht.
+This base image is intended as a shared starting point for future ECCo-SP component images.
 
-## Ziel
+## Purpose
 
-Das Image bildet nur die gemeinsamen Voraussetzungen ab:
+The image provides only the shared prerequisites:
 
-- UBI Minimal als gemeinsame Red-Hat-nahe Basis
-- Java 21 ueber `java-21-openjdk`
-- Bash und grundlegende Shell-Werkzeuge
-- TLS- und Zertifikatsbasis ueber `ca-certificates` und `openssl`
-- keine vorab erzeugten ECCo-SP-Laufzeitverzeichnisse
+- UBI Minimal as a shared Red Hat-based foundation
+- Java 21 via `java-21-openjdk`
+- Bash and basic shell tools
+- TLS and certificate support via `ca-certificates` and `openssl`
+- No pre-created ECCo-SP runtime directories
 
-## Eingebaute Basis-Haertung
+## Built-in Basic Hardening
 
-Das Base-Image bleibt bewusst einfach, bringt aber bereits einige sinnvolle Grundhaertungen mit:
+The base image is intentionally kept simple but already includes several useful basic hardening measures:
 
-- Paketinstallation ohne Weak Dependencies
-- Paketinstallation ohne Dokumentationsballast
-- Bereinigung von Paket- und Temp-Caches nach dem Build
-- Aktualisierung des CA-Trust-Stores
-- Anpassung der Java-`securerandom`-Quelle auf `urandom`
+- Package installation without weak dependencies
+- Package installation without documentation overhead
+- Cleanup of package and temporary caches after the build
+- Update of the CA trust store
+- Adjustment of the Java `securerandom` source to `urandom`
 
-Nicht enthalten sind bewusst haertere Einschraenkungen wie ein finaler Non-Root-User oder readonly Laufzeitannahmen, weil die spaeteren RPM-Installationen und die Komponentenskripte das je nach Komponente unterschiedlich erwarten koennen.
+Stricter restrictions, such as a final non-root user or read-only runtime assumptions, are intentionally not included because subsequent RPM installations and component scripts may have different requirements depending on the component.
 
-## Warum nicht Distroless
+## Why Not Distroless
 
-Die aktuelle ECCo-SP-Struktur erwartet an mehreren Stellen Shell-, Bash- und Startskript-Verhalten. Dazu kommen Tomcat- und Artemis-nahe Konfigurationen. Deshalb ist ein kleines, aber nicht distroless Base-Image fuer den ersten Schritt die robustere Wahl.
+The current ECCo-SP structure relies on shell, Bash, and startup script behavior in several places. It also includes Tomcat- and Artemis-related configurations. A small but non-distroless base image is therefore the more robust choice for this first step.
 
+## Why Tini Was Removed
 
-## Warum kein Tini mehr
+Tini is a very small init process for containers. It handles proper signal forwarding and reaping of terminated child processes.
 
-Tini ist ein sehr kleiner Init-Prozess fuer Container. Er kuemmert sich darum, Signale sauber weiterzugeben und beendete Kindprozesse aufzuraeumen.
+It was removed again from this initial base image because the current requirement is only for a lean, shared UBI Java base, with the actual startup logic to be supplied later for each component through RPM installation.
 
-Fuer dieses erste Base-Image habe ich es wieder entfernt, weil du aktuell nur eine schlanke gemeinsame UBI-Java-Basis willst und die eigentliche Startlogik spaeter komponentspezifisch ueber die RPM-Installation kommen soll.
+If a component later fails to handle signals or zombie processes correctly when running as PID 1, Tini can still be selectively reintroduced in the final component Dockerfile.
 
-Wenn spaeter eine Komponente als PID 1 unsauber mit Signalen oder Zombie-Prozessen umgeht, kann Tini immer noch gezielt im finalen Komponentendockerfile wieder aufgenommen werden.
+## Java Security Adjustment
 
-## Java-Sicherheitsanpassung
+The Java security configuration is adjusted after installation.
 
-Nach der Installation wird die Java-Sicherheitskonfiguration angepasst.
+The `java.security` file is located under `/usr/lib/jvm`, and the following line is replaced:
 
-Die Datei `java.security` wird unterhalb von `/usr/lib/jvm` gesucht, und folgende Zeile wird ersetzt:
+- From `securerandom.source=file:/dev/random`
+- To `securerandom.source=file:/dev/urandom`
 
-- von `securerandom.source=file:/dev/random`
-- auf `securerandom.source=file:/dev/urandom`
+This exactly matches the specified requirement and avoids blocking caused by `dev/random`.
 
-Das entspricht genau deiner Vorgabe und vermeidet Blockierungen durch `dev/random`.
-
-## Build-Beispiel
+## Build Example
 
 ```bash
 docker build \
@@ -56,15 +55,15 @@ docker build \
   ./Container/base-image
 ```
 
-## GitHub- und GHCR-Zuordnung
+## GitHub and GHCR Association
 
-Im Dockerfile sind OCI-Labels hinterlegt, damit das Image spaeter sauber einem GitHub-Repository zugeordnet werden kann.
+The Dockerfile includes OCI labels so that the image can later be properly associated with a GitHub repository.
 
-Besonders wichtig ist:
+Especially important:
 
 - `org.opencontainers.image.source`
 
-Diesen Wert solltest du beim Build auf die echte Repository-URL setzen, zum Beispiel:
+Set this value to the actual repository URL at build time, for example:
 
 ```bash
 docker build \
@@ -75,60 +74,60 @@ docker build \
   ./Container/base-image
 ```
 
-Wenn du spaeter nach GHCR pushst, ist genau diese Kombination aus Image-Name und OCI-Source-Label die saubere Grundlage fuer die Zuordnung zum GitHub-Repository.
+When pushing to GHCR later, this exact combination of image name and OCI source label provides a sound basis for association with the GitHub repository.
 
-## Anpassbare Build-Argumente
+## Configurable Build Arguments
 
-- `UBI_BASE_IMAGE` fuer das konkrete UBI-Minimal-Image
-- `IMAGE_SOURCE` fuer die GitHub-Repository-URL
-- `IMAGE_URL` fuer die Projekt-URL
-- `IMAGE_DOCUMENTATION` fuer die Doku-URL
-- `IMAGE_VERSION` fuer die fachliche Image-Version
+- `UBI_BASE_IMAGE` for the specific UBI Minimal image
+- `IMAGE_SOURCE` for the GitHub repository URL
+- `IMAGE_URL` for the project URL
+- `IMAGE_DOCUMENTATION` for the documentation URL
+- `IMAGE_VERSION` for the application-level image version
 
-## Wichtiger Hinweis zur Java-Version
+## Important Note on the Java Version
 
-Das Image installiert bewusst `java-21-openjdk`, weil das jetzt deine Vorgabe fuer die gemeinsame Basis ist.
+The image intentionally installs `java-21-openjdk` because this is the current requirement for the shared base.
 
-Vor produktivem Einsatz solltest du trotzdem noch pruefen, ob die gelieferten ECCo-SP-RPMs exakt mit dieser Java-Variante freigegeben sind.
+Before production use, still verify whether the supplied ECCo-SP RPMs are explicitly approved for this exact Java variant.
 
-## Wichtiger Hinweis zu Verzeichnissen
+## Important Note on Directories
 
-Das Base-Image legt bewusst keine ECCo-SP-spezifischen Laufzeitverzeichnisse an.
+The base image intentionally does not create any ECCo-SP-specific runtime directories.
 
-Die Annahme ist jetzt:
+The current assumptions are:
 
-- RPM-Installation erzeugt die benoetigte Zielstruktur
-- komponentenspezifische Dockerfiles uebernehmen nur noch RPM-Installation und Konfigurationsanpassung
-- keine kuenstliche Vorstruktur im Base-Image
+- RPM installation creates the required target structure
+- Component-specific Dockerfiles only handle RPM installation and configuration adjustments
+- No artificial directory structure is pre-created in the base image
 
-## Netzwerk- und Firewall-Hinweise
+## Network and Firewall Notes
 
-Diese Ports werden nicht im Image geoeffnet, sondern muessen auf VM-, Host-, Netzwerk- oder Kubernetes-Ebene freigegeben werden.
+These ports are not opened in the image; they must be allowed at the VM, host, network, or Kubernetes level.
 
-Moegliche ausgehende Datenbankports:
+Possible outbound database ports:
 
 - Oracle Database: 1521
 - Microsoft SQL Server: 1433
 - MySQL: 3306
 - PostgreSQL: 5432
 
-Kommunikation mit anderen ECP-Komponenten:
+Communication with other ECP components:
 
-Default Ports laut Vorgabe:
+Default ports according to the specification:
 
-| Komponente | Inbound | Outbound | Both |
+| Component | Inbound | Outbound | Both |
 | --- | --- | --- | --- |
 | Endpoint | - | - | 8443 |
 | Component Directory | 8443 | - | - |
 | Broker | 5671, 8161 | - | - |
 | Internal Broker | 5672, 8161 | - | 5671* |
 
-`5671*` beim Internal Broker bedeutet in der Praxis den moeglichen Kommunikationspfad zu weiteren ECP-Komponenten oder speziellen Routing-Szenarien. Diese Freigabe ist also keine Image-Eigenschaft, sondern eine Betriebs- und Netzwerkanforderung.
+For the Internal Broker, `5671*` indicates a possible communication path to additional ECP components or specific routing scenarios in practice. Allowing this traffic is therefore an operational and network requirement, not an image property.
 
-## Empfohlene Weiterentwicklung
+## Recommended Next Steps
 
-Die naechsten Dockerfiles sollten dieses Image als Basis verwenden und anschliessend nur noch komponentspezifisch ergaenzen:
+Future Dockerfiles should use this image as their base and then add only component-specific elements:
 
-- RPM installieren und nur die benoetigten Anpassungen vornehmen
-- benoetigte Konfigurationen und Startkommandos ergaenzen
-- Startkommando der jeweiligen Komponente definieren
+- Install the RPM and make only the required adjustments
+- Add the required configurations and startup commands
+- Define the startup command for the respective component

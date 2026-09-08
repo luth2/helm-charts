@@ -4,52 +4,70 @@
 
 ENTSO-E Communication & Connectivity Service Platform (ECCo SP) is a standardized communication platform for the Energy market. It contains ECP (Energy Communication Platform) and EDX (ENTSO-E Data Exchange) as a software solution for establishing communication between TSOs.
 
+## Documentation and Helm repository
+
+**Portal and repository:** <https://luth2.github.io/helm-charts/>
+
+```sh
+helm repo add eccosp https://luth2.github.io/helm-charts/
+helm repo update
+helm search repo eccosp --versions
+```
+
+- [Quickstart: versioned packages, values and GitOps](Dokumentation/Helm_Repository.md)
+- [Operations: Secrets, storage, HA and migration](Dokumentation/Helm_Charts.md)
+- [Enable Pages and publish safely](Dokumentation/GitHub_Pages.md)
+- [Published releases](https://github.com/luth2/helm-charts/releases)
+
+Use the four standalone charts for new installations. The legacy umbrella chart
+`ecco-sp` remains in the Helm index for existing users only.
+
 ## ECCo SP Security Feature
 
 ECCo SP is a software for creating a secure, centrally managed network for data exchange. With ECCo SP, business applications can confidently exchange data with other organizations that are part of the same network. Unlike traditional methods like SFTP, SMTP, and MFT, ECCo SP automatically manages the PKI (Public Key Infrastructure) and allows only authorized participants to communicate. Additionally, ECCo SP stands apart from AS4 by being centrally governed and allowing for endpoints to be placed within a protected network zone, ensuring that they are shielded from external threats.
 
 The key features of ECCo SP:
 
-* All messaging offers Confidentiality, Authentication, Integrity and Non-Repudiation.
-* The network can be scaled to support High Availability.
-* Access to the network is restricted through a registration process and controlled centrally. Compromised endpoints can be excluded from the network.
-* Secure Software Development Lifecycle, which guarantees regular vulnerability scanning, continuous updating of the software and immediate patching if necessary.
+- All messaging offers Confidentiality, Authentication, Integrity and Non-Repudiation.
+- The network can be scaled to support High Availability.
+- Access to the network is restricted through a registration process and controlled centrally. Compromised endpoints can be excluded from the network.
+- Secure Software Development Lifecycle, which guarantees regular vulnerability scanning, continuous updating of the software and immediate patching if necessary.
 
-## Kubernetes-Deployment mit Helm
+## Kubernetes deployment with Helm
 
-Die Helm Charts 5.0.0 verwenden Anwendungsimages 4.17.0 und benoetigen Helm 3
-sowie Kubernetes >= 1.28. Es gibt ausschliesslich vier Standalone-Charts:
+The 5.x Helm charts use application images 4.17.0 by default and require Helm 3
+and Kubernetes >= 1.28. There are exactly four standalone charts:
 [charts/ecp-endpoint/README.md](charts/ecp-endpoint/README.md),
 [charts/ecp-directory/README.md](charts/ecp-directory/README.md),
-[charts/ecp-broker/README.md](charts/ecp-broker/README.md) und
+[charts/ecp-broker/README.md](charts/ecp-broker/README.md) and
 [charts/eccosp-artemis/README.md](charts/eccosp-artemis/README.md).
-Jedes Chart wird direkt aus seinem Verzeichnis als unabhaengiger Helm-Release
-installiert, aktualisiert und zurueckgerollt; Partner werden nicht mitinstalliert.
-Die Chart-Version bleibt 5.0.0.
+Each chart is installed, upgraded and rolled back as an independent Helm release,
+either from the Helm repository or locally; partner services are not installed automatically.
+Explicitly pin the desired published chart version when installing.
 
-Pro Release die kanonischen Chart-Values vollstaendig in eine eigene Betreiberdatei
-kopieren und anpassen. Helm ersetzt Instanzlisten, statt ihre Eintraege zu mergen.
-Jede aktivierte Instanz braucht ein extern bereitgestelltes, befuelltes
-`existingSecret`; die unveraenderten Defaults scheitern absichtlich beim Lint/Rendern
-am leeren Secret-Namen. Helm erzeugt keine Secrets oder privaten Vollkonfigurationen;
-Registrierung und Keystore-Versorgung bleiben externe Betriebsaufgaben.
+For each release, copy the complete canonical chart values into a separate
+operator-managed file and adapt them. Helm replaces instance lists rather than merging entries.
+Each enabled instance requires an externally provisioned, populated
+`existingSecret`; the unchanged defaults intentionally fail linting/rendering
+because the Secret name is empty. Helm does not create Secrets or complete private configurations;
+registration and keystore provisioning remain external operational tasks.
 
-Alle vier Charts bieten optionales Routing mit `instance[].gateway.enabled: false`
-als Default. Voraussetzungen und Beispiele: [Dokumentation/Gateway_API.md](Dokumentation/Gateway_API.md).
+All four charts offer optional routing, with `instance[].gateway.enabled: false`
+as the default. Prerequisites and examples: [Dokumentation/Gateway_API.md](Dokumentation/Gateway_API.md).
 
-Deployment in fuenf Schritten, Secret-Key-Vertrag, HA, Rotation und sichere
-Migration mit PVC-Erhalt: [Dokumentation/Helm_Charts.md](Dokumentation/Helm_Charts.md).
-Bestehende Releases nicht blind aktualisieren: Selector und PVC-Namen koennen
-sich aendern; auch `fullnameOverride` garantiert kein kompatibles Upgrade.
-HA benoetigt abgestimmte externe Konfiguration und geeignetes Storage; Root-
-Initcontainer verhindern trotz Non-Root-Anwendung eine pauschale Restricted-PSA-
-Kompatibilitaet und koennen bei NFS `root_squash` scheitern.
+Five-step deployment, Secret key requirements, HA, rotation and safe migration
+while preserving PVCs: [Dokumentation/Helm_Charts.md](Dokumentation/Helm_Charts.md).
+Do not blindly upgrade existing releases: selectors and PVC names may change;
+even `fullnameOverride` does not guarantee a compatible upgrade.
+HA requires coordinated external configuration and suitable storage. Root
+init containers prevent a blanket claim of Restricted PSA compliance despite
+the non-root application, and may fail with NFS `root_squash`.
 
-Die CI validiert die vier Standalone-Charts ohne Cluster, einschliesslich
-synthetischer Fixtures, Lint, Rendern und Paketen. Fuer Gateway-Ressourcen werden
-die gepinnten Gateway-API-CRD-Quellen v1.4.1 ueber verifiziertes HTTPS geladen,
-per SHA-256 geprueft und in strikte Schemas ueberfuehrt. Das fuehrt keine CEL-
-Regeln aus und ersetzt keine Laufzeit- oder Clustertests.
+CI validates the four standalone charts without a cluster, including synthetic
+fixtures, linting, rendering and packages. For Gateway resources, the pinned
+Gateway API CRD sources v1.4.1 are downloaded over verified HTTPS, checked using
+SHA-256 and converted into strict schemas. This does not execute CEL rules
+and does not replace runtime or cluster tests.
 
 ## ECP - Energy Communication Platform
 
@@ -59,8 +77,8 @@ The purpose of the ECP is to provide message delivery capabilities with the foll
 
 ECP contains three components :
 
-* The client component - ECP Endpoint
-* The service provider components - ECP Component Directory and ECP Broker
+- The client component - ECP Endpoint
+- The service provider components - ECP Component Directory and ECP Broker
 
 ## EDX - ENTSO-E Data Exchange
 
@@ -74,5 +92,5 @@ EDX also allows the implementation of new integration channels easily. It create
 
 EDX contains two components :
 
-* The client component - EDX Toolbox
-* The service provider component - EDX Service Catalogue
+- The client component - EDX Toolbox
+- The service provider component - EDX Service Catalogue

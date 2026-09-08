@@ -5,3 +5,4 @@
 /.cr-release-packages/
 /.cr-index/
 /.github/scripts/__pycache__/
+/.github/pages/__pycache__/

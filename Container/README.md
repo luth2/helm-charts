@@ -1,13 +1,13 @@
 # Container
 
-Diese Ablage enthaelt die gemeinsame Container-Basis fuer spaetere ECCo-SP-Komponentenimages.
+This directory contains the shared container base for future ECCo-SP component images.
 
-Aktueller Inhalt:
+Current contents:
 
-- `base-image/` als gemeinsames UBI-Minimal-Base-Image fuer Java-basierte ECCo-SP-Komponenten
+- `base-image/` as the shared UBI Minimal base image for Java-based ECCo-SP components
 
-Ziel der Struktur:
+Purpose of this structure:
 
-- gemeinsame Java-Laufzeit und Basiswerkzeuge nur einmal pflegen
-- spaetere Komponentendockerfiles auf ein einheitliches Fundament setzen
-- Shell- und Java-Anforderungen aus den bestehenden ECCo-SP-Deployments bereits im Basisimage abdecken
+- Maintain the shared Java runtime and basic tools in one place
+- Build future component Dockerfiles on a consistent foundation
+- Cover the shell and Java requirements of existing ECCo-SP deployments in the base image itself

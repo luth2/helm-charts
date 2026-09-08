@@ -1,108 +1,108 @@
 # Endpoint
 
-Offizielle Quelle:
+Official source:
 
 - [Endpoint Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/endpoint-manual)
 - [ECCo SP Documents](https://eccosp-docs.entsoe.eu/k)
 
-## Zweck
+## Purpose
 
-Der Endpoint ist die nutzernahe Komponente von ECP. Er stellt die Oberfläche und die API bereit, über die Business-Anwendungen Nachrichten senden, empfangen und in bestehende Prozesse integrieren.
+The Endpoint is the user-facing component of ECP. It provides the user interface and API through which business applications send and receive messages and integrate them into existing processes.
 
-## Rolle im Gesamtsystem
+## Role in the Overall System
 
-Der Endpoint sitzt zwischen den fachlichen Anwendungen und den zentralen Kommunikationsdiensten von ECCo SP.
+The Endpoint sits between business applications and the central communication services of ECCo SP.
 
-- Für die interne Verarbeitung ist er an den internen Broker angebunden.
-- Für den externen Nachrichtenaustausch nutzt er den Broker.
-- Für Zertifikate und Informationen über andere Komponenten greift er auf das Component Directory zu.
+- It connects to the Internal Broker for internal processing.
+- It uses the Broker for external message exchange.
+- It accesses the Component Directory for certificates and information about other components.
 
-## Wichtige Schnittstellen
+## Important Interfaces
 
-- Interner Broker: AMQPS, typischer Default-Port 5672
-- Broker: AMQPS, typischer Default-Port 5671
-- Component Directory: HTTPS, typischer Default-Port 8443
+- Internal Broker: AMQPS, typical default port 5672
+- Broker: AMQPS, typical default port 5671
+- Component Directory: HTTPS, typical default port 8443
 
-Die offizielle Doku beschreibt den Endpoint außerdem als zentrale Integrationskomponente für verschiedene Kanäle und Verarbeitungsstufen, darunter Vor- und Nachverarbeitung sowie Registrierungshilfen.
+The official documentation also describes the Endpoint as a central integration component for various channels and processing stages, including pre-processing, post-processing and registration helpers.
 
-## Betriebsrelevante Punkte
+## Operational Considerations
 
-- Ein Endpoint muss in einem Home Component Directory registriert sein, um am ECP-Netz teilzunehmen.
-- Die Verbindung zum Component Directory ist für laufendes Messaging nicht permanent zwingend, solange die zwischengespeicherten Informationen gueltig sind.
-- Laut Dokumentation liegt die Default-TTL eines CD-Eintrags bei 28 Tagen.
-- Die Konfiguration der Message Paths auf Empfängerseite bestimmt, welcher Broker für ein bestimmtes Routing verwendet wird.
+- An Endpoint must be registered with a Home Component Directory to participate in the ECP network.
+- A continuous connection to the Component Directory is not strictly required for ongoing messaging as long as the cached information remains valid.
+- According to the documentation, the default TTL of a CD entry is 28 days.
+- The configuration of Message Paths on the recipient side determines which Broker is used for a particular route.
 
-## Bezug zum Helm-Repository
+## Relationship to the Helm Repository
 
 - Chart: `charts/ecp-endpoint`
-- Beispiel-Values: `ecco-sp/values-ecp-endpoint-ep1.yaml`, `ecco-sp/values-ecp-endpoint-ep2.yaml`
+- Example values: `ecco-sp/values-ecp-endpoint-ep1.yaml`, `ecco-sp/values-ecp-endpoint-ep2.yaml`
 
-## Installationsanleitung auf VM
+## VM Installation Guide
 
-### Zielbild
+### Target Setup
 
-Der Endpoint wird auf einer eigenen VM oder auf einer dedizierten Applikations-VM betrieben und verbindet sich von dort aus mit drei externen Diensten:
+The Endpoint runs on its own VM or on a dedicated application VM and connects from there to three external services:
 
-- intern mit dem internen Broker auf Port 5672
-- extern mit dem Broker auf Port 5671
-- administrativ mit dem Component Directory auf Port 8443
+- Internally to the Internal Broker on port 5672
+- Externally to the Broker on port 5671
+- Administratively to the Component Directory on port 8443
 
-### Voraussetzungen
+### Prerequisites
 
-- Linux-VM mit Java-Laufzeit entsprechend dem offiziellen Softwarepaket
-- Ein erreichbares Component Directory
-- Ein erreichbarer interner Broker
-- Ein erreichbarer Broker fuer den externen Nachrichtenaustausch
-- Vorbereitete Keystores fuer Registrierung und Authentisierung
-- Optional eine externe Datenbank, falls kein lokaler Datenpfad genutzt werden soll
+- Linux VM with a Java runtime matching the official software package
+- Reachable Component Directory
+- Reachable Internal Broker
+- Reachable Broker for external message exchange
+- Prepared keystores for registration and authentication
+- Optional external database if a local data path is not to be used
 
-### Wichtige Verzeichnisse und Dateien
+### Important Directories and Files
 
-Aus den Repo-Konfigurationen lassen sich fuer den klassischen Betrieb vor allem diese Dateien und Pfade ableiten:
+The repository configurations identify the following key files and paths for traditional operation:
 
-- Laufzeitdaten unter `/var/lib/ecp-endpoint`
-- Logs unter `/var/log/ecp-endpoint`
-- Hauptkonfiguration `ecp.properties`
-- Logging-Konfiguration `ecp-logback.xml`
+- Runtime data under `/var/lib/ecp-endpoint`
+- Logs under `/var/log/ecp-endpoint`
+- Main configuration `ecp.properties`
+- Logging configuration `ecp-logback.xml`
 - Keystore `keystore.jks`
-- Authentifizierungs-Keystore `authKeystore.jks`
+- Authentication keystore `authKeystore.jks`
 
-Für einen späteren Container-Build sind genau diese Artefakte die Trennlinie zwischen Image-Inhalt und externer Laufzeitkonfiguration.
+For a later container build, these artifacts define the boundary between image content and external runtime configuration.
 
-### Installationsablauf
+### Installation Procedure
 
-1. Die VM mit Betriebssystem, Java und Systembenutzer fuer den Endpoint vorbereiten.
-2. Das offizielle Endpoint-Softwarepaket auf die VM installieren oder entpacken.
-3. Daten-, Log- und Konfigurationsverzeichnisse anlegen und mit stabilen Pfaden versehen.
-4. `ecp.properties` mit Datenpfad, Broker-Verbindungen, Home Component Directory und Keystore-Pfaden konfigurieren.
-5. Falls HA benoetigt wird, die externe Datenbank anbinden und das passende HA-Profil aktivieren.
-6. Zertifikate und Keystores in die vorgesehenen Pfade ablegen.
-7. Den Endpoint als Dienst, typischerweise via systemd oder herstellerspezifischem Startskript, registrieren.
-8. Den Dienst starten und die HTTPS-Oberflaeche pruefen.
+1. Prepare the VM with an operating system, Java and a system user for the Endpoint.
+2. Install or extract the official Endpoint software package on the VM.
+3. Create the data, log and configuration directories with stable paths.
+4. Configure `ecp.properties` with the data path, Broker connections, Home Component Directory and keystore paths.
+5. If HA is required, connect the external database and activate the appropriate HA profile.
+6. Place certificates and keystores at the designated paths.
+7. Register the Endpoint as a service, typically using systemd or a vendor-specific startup script.
+8. Start the service and check the HTTPS user interface.
 
-### Inhaltlich wichtige Parameter
+### Key Configuration Parameters
 
-Bei einer VM-Installation muessen insbesondere diese Punkte korrekt gesetzt sein:
+The following settings in particular must be configured correctly for a VM installation:
 
 - `internalBroker.urls`, `internalBroker.host`, `internalBroker.amqp.port`
 - `internalBroker.auth.user`, `internalBroker.auth.password`
 - `ecp.keystore.location`, `ecp.authKeystore.location`
 - `ecp.directory.client.synchronization.homeComponentDirectoryPrimaryCode`
 - `ecp.directory.client.synchronization.homeComponentDirectoryPrimaryUrl`
-- gegebenenfalls `ecp.db.*` fuer externe Datenbankanbindung
+- If applicable, `ecp.db.*` for an external database connection
 
-### Validierung nach der Installation
+### Post-Installation Validation
 
-- HTTPS-Zugriff auf den Endpoint pruefen
-- Verbindung zum internen Broker pruefen
-- Verbindung zum Broker pruefen
-- Synchronisation mit dem Component Directory pruefen
-- Registrierung abschliessen und Message Paths validieren
+- Check HTTPS access to the Endpoint
+- Check the connection to the Internal Broker
+- Check the connection to the Broker
+- Check synchronization with the Component Directory
+- Complete registration and validate Message Paths
 
-### Hinweis fuer die Installationsreihenfolge
+### Installation Order Note
 
-Der Endpoint sollte auf VMs immer zuletzt in Betrieb gehen, weil er auf den funktionierenden internen Broker, den Broker und das Component Directory angewiesen ist.
+On VMs, the Endpoint should always be brought into operation last because it depends on a working Internal Broker, Broker and Component Directory.
 
-## Kurzfazit
+## Conclusion
 
-Der Endpoint ist der eigentliche Einstiegspunkt für Anwendungen. Wenn im Betrieb Integrationsfragen, Routing, Zertifikatsbezug oder die Anbindung an interne und externe Messaging-Dienste relevant sind, ist diese Komponente der primäre Ansatzpunkt.
+The Endpoint is the actual entry point for applications. It is the primary starting point for operational questions about integration, routing, obtaining certificates or connections to internal and external messaging services.

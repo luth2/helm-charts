@@ -1,223 +1,227 @@
-# ECCoSP Helm Charts 5.0.0
+# ECCoSP Helm Charts: Configuration and Operations
 
-## Empfehlung und Geltungsbereich
+To install versioned packages without a Git checkout, see:
+[Helm Repository and Quickstart](Helm_Repository.md).
+The local examples in this guide are intended for working with chart sources.
 
-Neue Installationen mit expliziten Instanz-Values und bereits bereitgestellten
-externen Secrets aufbauen. Bestehende Installationen zuerst sichern und gestuft
-migrieren, nicht blind mit `helm upgrade` aktualisieren.
+## Recommendation and Scope
 
-Alle vier Standalone-Charts haben unveraendert Version **5.0.0**, `appVersion` **4.17.0** und setzen
-Kubernetes >= 1.28 sowie Helm 3 voraus. Die CI verwendet Helm 3.19.0.
-Chart-Version und Image-Version sind unterschiedliche Versionsachsen.
-Die Default-Image-Tags sind Strings, nicht `latest`; BusyBox ist auf 1.37.0 gesetzt.
-Die Images und ihre Laufzeitkompatibilitaet muessen fuer die Zielumgebung
-verfuegbar und freigegeben sein. Alternativ ist `image.digest` mit SHA-256
-moeglich; bei gesetztem Digest hat dieser Vorrang vor dem Tag.
-`image.name` enthaelt das vollstaendige Repository; `image.registry` ist ungueltig.
+Set up new installations with explicit instance values and external Secrets
+that have already been provisioned. Back up existing installations first and
+migrate them in stages; do not blindly update them with `helm upgrade`.
 
-### Versionierung und Namen
+The four standalone charts in the **5.x series** use `appVersion` **4.17.0** and require
+Kubernetes >= 1.28 and Helm 3. CI uses Helm 3.19.0.
+Chart versions and image versions are separate versioning dimensions.
+The default image tags are strings, not `latest`; BusyBox is set to 1.37.0.
+The images must be available for the target environment, and their use and
+runtime compatibility must be approved. Alternatively, `image.digest` can use
+SHA-256; when a digest is set, it takes precedence over the tag.
+`image.name` contains the full repository; `image.registry` is invalid.
 
-- `Chart.yaml: version` versioniert das Helm-Chart: Paket `ecp-broker-5.0.0.tgz`
-   und GitHub-Release/Tag `ecp-broker-5.0.0`. Bei Chart-Aenderungen diese Version
-   fuer eine neue Veroeffentlichung erhoehen.
-- `Chart.yaml: appVersion` beschreibt die Anwendung. Es darf unabhaengig von der
-   Chart-Version wechseln und bestimmt weder Paketnamen noch Dependency-Versionen.
-- `instance[].image.tag` bzw. `image.digest` bestimmt das tatsaechliche Containerimage;
-   `appVersion` setzt den Tag nicht automatisch.
-- Kubernetes-Ressourcennamen bleiben `<release>-<chart>-<instance>` (gegebenenfalls
-   gekuerzt/gehasht), ohne Chart- oder App-Version. Eine Version im StatefulSet-Namen
-   wuerde bei Upgrades neue Ressourcennamen und andere PVC-Zuordnungen erzeugen.
-- Bereits veroeffentlichte Chart-Versionen werden nicht ueberschrieben
-   (`skip-existing`). Fuer eine geaenderte Veroeffentlichung eine neue Chart-Version nutzen.
+### Versioning and Names
 
-| Chart | Aufgabe | Kanonische Defaults |
+- `Chart.yaml: version` versions the Helm chart: package `ecp-broker-5.0.0.tgz`
+    and GitHub release/tag `ecp-broker-5.0.0`. When changing the chart, increment
+    this version for a new publication.
+- `Chart.yaml: appVersion` describes the application. It can change independently
+    of the chart version and determines neither package names nor dependency versions.
+- `instance[].image.tag` or `image.digest` determines the actual container image;
+    `appVersion` does not set the tag automatically.
+- Kubernetes resource names remain `<release>-<chart>-<instance>` (truncated/hashed
+    if necessary), without a chart or application version. Including a version in the
+    StatefulSet name would create new resource names and different PVC mappings during upgrades.
+- Previously published chart versions are not overwritten
+    (`skip-existing`). Use a new chart version for a changed publication.
+
+| Chart | Purpose | Canonical Defaults |
 | --- | --- | --- |
 | [../charts/ecp-endpoint/README.md](../charts/ecp-endpoint/README.md) | Endpoint | [../charts/ecp-endpoint/values.yaml](../charts/ecp-endpoint/values.yaml) |
 | [../charts/ecp-directory/README.md](../charts/ecp-directory/README.md) | Component Directory | [../charts/ecp-directory/values.yaml](../charts/ecp-directory/values.yaml) |
 | [../charts/ecp-broker/README.md](../charts/ecp-broker/README.md) | ECP Broker | [../charts/ecp-broker/values.yaml](../charts/ecp-broker/values.yaml) |
-| [../charts/eccosp-artemis/README.md](../charts/eccosp-artemis/README.md) | Interner Artemis-Broker | [../charts/eccosp-artemis/values.yaml](../charts/eccosp-artemis/values.yaml) |
+| [../charts/eccosp-artemis/README.md](../charts/eccosp-artemis/README.md) | Internal Artemis Broker | [../charts/eccosp-artemis/values.yaml](../charts/eccosp-artemis/values.yaml) |
 
-Die Chart-Quellen liegen ausschliesslich unter `charts/`. Jede Komponente wird
-direkt aus ihrem Chart-Verzeichnis als unabhaengiger Helm-Release installiert,
-aktualisiert und zurueckgerollt. Es gibt keinen gemeinsamen Plattform-Release
-und keinen Dependency-Build fuer diese Charts. Partnerdienste und ihre
-Verbindungen muessen separat bereitgestellt und konfiguriert werden.
-Die Charts installieren weder Datenbanken noch EDX Toolbox oder Service Catalogue.
+Chart sources are located exclusively under `charts/`. Each component is
+installed, upgraded, and rolled back as an independent Helm release, either
+from the Helm repository or locally from its chart directory. These charts have
+no shared platform release and no dependency build. Partner services and their
+connections must be provisioned and configured separately.
+The charts do not install databases, EDX Toolbox, or Service Catalogue.
 
-## Konfigurationsvertrag: oeffentlich und privat strikt trennen
+## Configuration Contract: Strictly Separate Public and Private Configuration
 
-Jede aktivierte Instanz braucht `instance[].existingSecret` im Release-Namespace.
-Die Standalone-Defaults lassen diesen String absichtlich leer: Lint und Rendern
-ohne Betreiberkonfiguration sollen scheitern. Die jeweilige Default-Instanz ist
-aktiviert; ein leeres Secret-Feld ist keine einsatzbereite Konfiguration.
+Every enabled instance requires `instance[].existingSecret` in the release namespace.
+The standalone defaults deliberately leave this string empty: linting and rendering
+without operator configuration are intended to fail. Each default instance is
+enabled; an empty Secret field is not a deployment-ready configuration.
 
-Helm erzeugt **kein Secret**. Es projiziert eine oeffentliche ConfigMap zusammen
-mit ausgewaehlten Keys eines vorhandenen Secrets und bindet die Dateien ein.
-Es prueft weder die Existenz des Secrets noch die fachliche Gueltigkeit seines
-Inhalts. Fehlende Keys verhindern den Pod-Start; unpassende Inhalte koennen trotz
-erfolgreichem Helm-Rendering zu Anwendungsfehlern fuehren.
+Helm creates **no Secret**. It projects a public ConfigMap together with selected
+keys from an existing Secret and mounts the files.
+It checks neither the existence of the Secret nor the semantic validity of its
+contents. Missing keys prevent the Pod from starting; unsuitable contents can
+cause application errors even when Helm rendering succeeds.
 
-### Erforderliche Secret-Keys
+### Required Secret Keys
 
-Jeder Key enthaelt eine **vollstaendige Datei**, nicht nur einen einzelnen
-Passwortwert. Es gibt keinen Merge zwischen Values und externer Vollkonfiguration.
+Each key contains a **complete file**, not just an individual password value.
+There is no merge between values and the external full configuration.
 
-| Komponente | Immer erforderlich | Bedingt erforderlich |
+| Component | Always Required | Conditionally Required |
 | --- | --- | --- |
-| EP | `ecp.properties`, `ecp-users.properties`, `ecp-password.properties`, `server.xml`, `users.properties` | Bei nichtleerem `jmxRemoteProperties`: `jmxremote.password`, `jmxremote.ssl` |
-| CD | `ecp-directory.properties`, `ecp-users.properties`, `ecp-password.properties`, `server.xml` | Bei nichtleerem `jmxRemoteProperties`: `jmxremote.password`, `jmxremote.ssl` |
-| BR | `broker.properties`, `artemis-users.properties` | Single: `broker.xml`; HA: `broker-master.xml` und `broker-slave.xml`; mit Web-Service: `bootstrap.xml` |
-| AR | `artemis-users.properties` | Single: `broker.xml`; HA: `broker-master.xml` und `broker-slave.xml`; mit Web-Service: `bootstrap.xml` |
+| EP | `ecp.properties`, `ecp-users.properties`, `ecp-password.properties`, `server.xml`, `users.properties` | If `jmxRemoteProperties` is non-empty: `jmxremote.password`, `jmxremote.ssl` |
+| CD | `ecp-directory.properties`, `ecp-users.properties`, `ecp-password.properties`, `server.xml` | If `jmxRemoteProperties` is non-empty: `jmxremote.password`, `jmxremote.ssl` |
+| BR | `broker.properties`, `artemis-users.properties` | Single: `broker.xml`; HA: `broker-master.xml` and `broker-slave.xml`; with a web service: `bootstrap.xml` |
+| AR | `artemis-users.properties` | Single: `broker.xml`; HA: `broker-master.xml` and `broker-slave.xml`; with a web service: `bootstrap.xml` |
 
-Web-Service bedeutet ein konfiguriertes `service.http` oder `service.https`.
-Die Broker-Defaults enthalten HTTPS, benoetigen also `bootstrap.xml`.
-Bei HA werden die Master-/Slave-Eingaben durch den nichtprivilegierten
-Initcontainer verarbeitet; das daraus entstehende Arbeits-XML ist keine von
-Helm aus privaten Values gerenderte Vollkonfiguration.
+A web service means a configured `service.http` or `service.https`.
+The broker defaults include HTTPS, so they require `bootstrap.xml`.
+For HA, the master/slave inputs are processed by the unprivileged init container;
+the resulting working XML is not a full configuration rendered by Helm from
+private values.
 
-Private Vollfiles ausserhalb des Repositorys anhand der offiziellen, zur
-Image-Version passenden ECP-/Artemis-Konfiguration erstellen und ueber den
-freigegebenen Secret-Prozess bereitstellen. Keine Secret-Manifeste, privaten
-Vollfile-Beispiele, Zugangsdaten oder Keystores in dieses Repository aufnehmen.
-Insbesondere nicht alte Template-Defaults als sichere Betriebswerte kopieren.
+Create complete private configuration files outside the repository using the
+official ECP/Artemis configuration for the image version, and provision them
+through the approved Secret process. Do not add Secret manifests, examples of
+complete private configuration files, credentials, or keystores to this repository.
+In particular, do not copy old template defaults as safe operational values.
 
-Vor dem Start muessen in diesen externen Dateien zusammenpassen:
+Before startup, the following must be consistent across these external files:
 
-- Tatsaechliche Listener-Ports, Bind-Adressen, Service-/Pod-DNS und externe URLs.
-- Datenbank-URL, Treiber, Schema, Credentials, Verbindungsparameter und HA-Profil.
-- TLS-Protokolle, Zertifikate, Client-Authentifizierung, Trust-/Keystore-Pfade,
-  Aliase und zugehoerige Passwoerter.
-- Benutzer, Rollen, ECP-/Audit-Kennungen, Registrierungsdaten und interne
-  Broker-Verbindungen; keine festen Beispielkennungen als produktive Identitaet.
-- Daten-, Journal-, Logging- und sonstige Dateipfade zu den vorhandenen Mounts.
-- Bei HA Shared-Store-Topologie, Connectoren und Cluster-Authentifizierung.
+- Actual listener ports, bind addresses, Service/Pod DNS, and external URLs.
+- Database URL, driver, schema, credentials, connection parameters, and HA profile.
+- TLS protocols, certificates, client authentication, truststore/keystore paths,
+   aliases, and associated passwords.
+- Users, roles, ECP/audit identifiers, registration data, and internal broker
+   connections; do not use fixed example identifiers as production identities.
+- Data, journal, logging, and other file paths must match the existing mounts.
+- For HA, shared-store topology, connectors, and cluster authentication.
 
-### Was die verbliebenen Values bewirken
+### What the Remaining Values Control
 
-| Bereich | Tatsaechliche Wirkung |
+| Area | Actual Effect |
 | --- | --- |
-| `image`, `replicaCount`, `resourcesK8s`, `securityContext`, Storage, Service, Ingress, Gateway, Probes | Kubernetes-Ressourcen und Pod-Konfiguration |
-| EP/CD `envConf.resourcesJvm`, `envConf.ecpLogFullStackTrace` | Oeffentliche JVM-Startkonfiguration |
-| BR/AR `env.resourcesJvm` | Oeffentliche Artemis-Startkonfiguration |
-| EP/CD `dataDirectory`, `loggingFilePath` | Daten-/Logs-PVC-Mountpfade; externe Properties muessen dazu passen |
-| EP/CD `springProfilesActive` | HA-Helper-Validierung; das Laufzeit-/Logging-Profil muss zusaetzlich extern gesetzt sein |
-| EP/CD `loggingFileName`, `loggingConfig` | Expliziter Pfadabgleich; keine Aenderung der externen Properties |
-| EP `ecpProperties.internalBrokerAuthUser` | Benutzername im oeffentlichen Gruppenmapping, keine Kontoanlage |
-| EP optional `usersProperties.users[].login` | Weitere oeffentliche Gruppenmitglieder, Passwort nur extern |
-| EP/CD `instance[].jmxRemoteUsers` mit `login`/`access` | Oeffentliches JMX-Access-Mapping; passende Passwortdatei extern |
-| BR/AR `artemisUsers[].login` | Oeffentliches `amq`-Rollenmapping; Benutzer/Credentials extern |
-| EP/CD `sessionReplication` | Oeffentlicher Tomcat-Kontext und DNS-Umgebung; passendes externes Server-XML weiterhin erforderlich |
-| BR/AR `brokerXml.highAvailability.acceptor.port` | HA-Port von Pod und Headless-Service, nicht Inhalt externer XML-Dateien |
+| `image`, `replicaCount`, `resourcesK8s`, `securityContext`, Storage, Service, Ingress, Gateway, Probes | Kubernetes resources and Pod configuration |
+| EP/CD `envConf.resourcesJvm`, `envConf.ecpLogFullStackTrace` | Public JVM startup configuration |
+| BR/AR `env.resourcesJvm` | Public Artemis startup configuration |
+| EP/CD `dataDirectory`, `loggingFilePath` | Data/log PVC mount paths; external properties must match |
+| EP/CD `springProfilesActive` | HA helper validation; the runtime/logging profile must also be set externally |
+| EP/CD `loggingFileName`, `loggingConfig` | Explicit path consistency check; no changes to external properties |
+| EP `ecpProperties.internalBrokerAuthUser` | Username in the public group mapping; does not create an account |
+| EP optional `usersProperties.users[].login` | Additional public group members; passwords are external only |
+| EP/CD `instance[].jmxRemoteUsers` with `login`/`access` | Public JMX access mapping; matching password file is external |
+| BR/AR `artemisUsers[].login` | Public `amq` role mapping; users/credentials are external |
+| EP/CD `sessionReplication` | Public Tomcat context and DNS environment; matching external server XML is still required |
+| BR/AR `brokerXml.highAvailability.acceptor.port` | HA port of the Pod and headless Service, not the contents of external XML files |
 
-Die Logback-/Log4j-Konfiguration wird oeffentlich geliefert. `console-logging`
-in EP/CD-Values allein aktiviert das Laufzeitprofil nicht; es muss im Secret
-ebenfalls stehen. Private Benutzerlisten entfallen aus Values. Beim CD kann eine
-leere Rollenzuordnung nach offizieller Konfiguration extern erhalten bleiben;
-Helm setzt keine vermeintliche Standardrolle ein.
+The Logback/Log4j configuration is provided as public configuration. Setting
+`console-logging` in EP/CD values alone does not enable the runtime profile; it
+must also be present in the Secret. Private user lists are no longer part of values.
+For CD, an empty role mapping may be retained externally in accordance with the
+official configuration; Helm does not insert an assumed default role.
 
-Das benannte interne `configuration`-Template rendert ausschliesslich
-oeffentliche Konfiguration. Private Vollfiles werden auch intern **gar nicht
-gerendert**; private Legacy-Datensektionen und Dummy-Werte sind entfernt.
-Die `omit`-Listen in `publicConfig` und der ConfigMap-Ausgabe bleiben als
-defensiver Schutz fuer reservierte private Datei-Keys erhalten. Alte private
-Values steuern keine extern eingebundene Datei. Weder diese Filter noch ein
-erfolgreicher Render validieren Secret-Inhalte oder deren Uebereinstimmung mit Values.
-`configMap`, Umgebungsvariablen und zusaetzliche Mounts nicht als Umgehung dieses
-Vertrags fuer private Inhalte benutzen.
+The internal named `configuration` template renders public configuration only.
+Complete private configuration files are **not rendered at all**, even internally;
+legacy private data sections and dummy values have been removed.
+The `omit` lists in `publicConfig` and the ConfigMap output remain as a
+defensive safeguard for reserved private file keys. Old private values do not
+control any externally mounted file. Neither these filters nor successful rendering
+validate Secret contents or their consistency with values.
+Do not use `configMap`, environment variables, or additional mounts to bypass
+this contract for private contents.
 
-## Beispiele, Listen und globale Einstellungen
+## Examples, Lists, and Global Settings
 
-Pro Release die gesamten kanonischen Values des passenden Charts in eine eigene
-Betreiberdatei kopieren. Darin alle Instanzeinstellungen pruefen, insbesondere
-Name, `existingSecret`, Image, Storage, Ressourcen, Ports und externe Verbindungen.
-Die folgenden Secret-Namen sind Platzhalter fuer extern bereitzustellende Objekte,
-keine mitgelieferten Secrets.
+For each release, copy the complete canonical values of the appropriate chart into
+a dedicated operator values file. Check all instance settings in that file, especially
+the name, `existingSecret`, image, storage, resources, ports, and external connections.
+The following Secret names are placeholders for objects to be provisioned externally,
+not Secrets supplied by the charts.
 
-| Chart | Release | Instanz | `existingSecret` |
+| Chart | Release | Instance | `existingSecret` |
 | --- | --- | --- | --- |
 | Endpoint | `ep1` | `ep1` | `ecp-endpoint-ep1-config` |
 | Directory | `cd` | `cd` | `ecp-directory-cd-config` |
 | ECP Broker | `br` | `br` | `ecp-broker-br-config` |
-| Interner Artemis-Broker | `eptb1` | `artemis-eptb1` | `eccosp-artemis-eptb1-config` |
+| Internal Artemis Broker | `eptb1` | `artemis-eptb1` | `eccosp-artemis-eptb1-config` |
 
-**Helm ersetzt Listen.** Fuer mehrere Instanzen desselben Charts eine gemeinsame
-vollstaendige `instance`-Liste mit allen Eintraegen pflegen oder getrennte Releases
-verwenden. Zwei `-f`-Dateien mit je einer Instanz werden nicht zusammengefuehrt:
-Die letzte Liste gewinnt. Values verschiedener Charts gehoeren in getrennte
-Helm-Aufrufe, nicht in einen gemeinsamen Aufruf. Zwei unabhaengige Instanzen
-sind kein HA-Cluster. Eine weitere Endpoint-Instanz aktiviert JMX nicht automatisch.
+**Helm replaces lists.** For multiple instances of the same chart, maintain one
+complete `instance` list containing all entries, or use separate releases.
+Two `-f` files with one instance each are not merged:
+the last list wins. Values for different charts belong in separate Helm
+invocations, not in a single combined invocation. Two independent instances
+are not an HA cluster. An additional Endpoint instance does not enable JMX automatically.
 
-`global` liegt an der Wurzel jeder Standalone-Values-Datei und gilt nur fuer den
-jeweiligen Release. Gemeinsame Betreiberwerte bewusst in allen betroffenen
-Dateien pflegen, statt Storage oder Registry-Konfiguration unbeabsichtigt zu
-ueberschreiben:
+`global` is at the root of each standalone values file and applies only to that
+release. Deliberately maintain shared operator values in all affected files
+rather than unintentionally overwriting storage or registry configuration:
 
-- `global.storage.class: ''`: `storageClassName` wird bei normalen PVCs weggelassen;
-  die Default-StorageClass des Clusters wird verwendet.
-- `global.storage.class: '-'`: explizit leere StorageClass, keine dynamische
-  Default-Provisionierung; passende statische PVs muessen vorhanden sein.
-- Ein anderer String benennt die gewuenschte StorageClass. Keine Klasse wird
-  vom Chart angelegt; Shared-Storage-Klassen werden separat gesetzt.
-- `global.imagePullSecrets: []`: keine Registry-Credentials vorausgesetzt.
-  Bei Bedarf vorhandene Pull-Secrets im Zielnamespace referenzieren.
-- `global.imageBusybox`: `busybox` mit Tag `'1.37.0'`.
+- `global.storage.class: ''`: `storageClassName` is omitted for normal PVCs;
+   the cluster's default StorageClass is used.
+- `global.storage.class: '-'`: an explicitly empty StorageClass, with no dynamic
+   default provisioning; matching static PVs must exist.
+- Any other string names the desired StorageClass. The chart does not create
+   any class; shared-storage classes are set separately.
+- `global.imagePullSecrets: []`: no registry credentials are assumed.
+   Reference existing pull Secrets in the target namespace if needed.
+- `global.imageBusybox`: `busybox` with tag `'1.37.0'`.
 
-## Deployment in fuenf Schritten
+## Deployment in Five Steps
 
-Die folgenden Befehle sind Beispiele fuer den Betreiber, keine hier ausgefuehrten
-Aktionen. Alle Pfade gelten ab Repository-Root. Fuer eine neue Installation
-verwenden wir die getrennten Releases `cd`, `br`, `eptb1` und `ep1` im Namespace
-`eccosp`. Die Betreiberdateien liegen im selbst anzulegenden Verzeichnis
-`../eccosp-values` ausserhalb des Repositorys und enthalten keine privaten Vollfiles.
+The following commands are examples for the operator, not actions executed here.
+All paths are relative to the repository root. For a new installation, we use
+the separate releases `cd`, `br`, `eptb1`, and `ep1` in the namespace
+`eccosp`. The operator values files reside in the `../eccosp-values` directory,
+which you must create outside the repository; they contain no complete private
+configuration files.
 
-### 1. Zielumgebung und Migrationsbedarf klaeren
+### 1. Clarify the Target Environment and Migration Requirements
 
-Kubernetes-Version, Image-Zugriff, Storage, Kapazitaet, Netzwerk/TLS, Namespace-
-Policies und benoetigte externe Datenbanken freigeben. Bei bestehender Installation
-zuerst den Migrationsabschnitt abarbeiten. Die Beispielgroessen sind Startwerte,
-keine Produktionsdimensionierung. JVM-Heap plus nativer Speicher muessen unter
-dem Container-Limit bleiben; Requests nach Lastmessung anpassen.
+Approve the Kubernetes version, image access, storage, capacity, network/TLS,
+namespace policies, and required external databases. For an existing installation,
+complete the migration section first. The example sizes are starting points,
+not production sizing. JVM heap plus native memory must remain below the
+container limit; adjust requests based on load measurements.
 
-### 2. Vollkonfiguration und Secrets vorbereiten
+### 2. Prepare the Full Configuration and Secrets
 
-Die benoetigten kompletten Dateien nach obigem Vertrag **ausserhalb des Repositorys**
-erstellen. Den Zielnamespace und alle benoetigten Secrets durch den freigegebenen
-Betriebsprozess bereitstellen lassen. Vor Schritt 5 muessen sie vollstaendig
-befuellt sein; ein leerer Secret-Platzhalter genuegt nicht. Die Beispiele legen
-keine Benutzer, Datenbanken, TLS-Zertifikate oder ECP-Registrierungen an.
+Create the required complete files **outside the repository** according to the
+contract above. Have the target namespace and all required Secrets provisioned
+through the approved operational process. They must be fully populated before
+step 5; an empty Secret placeholder is insufficient. The examples do not create
+users, databases, TLS certificates, or ECP registrations.
 
-Die externen Dateien fuer die vier eigenstaendigen Releases auf diese Services abstimmen:
+Align the external files for the four independent releases with these Services:
 
-| Verbindung | Adresse innerhalb desselben Namespace |
+| Connection | Address Within the Same Namespace |
 | --- | --- |
 | Directory | `https://cd-ecp-directory-cd-svc:8443/ECP_MODULE` |
 | ECP Broker | `amqps://br-ecp-broker-br-svc:5671` |
 | Endpoint EP1 | `https://ep1-ecp-endpoint-ep1-svc:8443` |
-| Interner Broker fuer EP1 | `amqps://eptb1-eccosp-artemis-artemis-eptb1-svc:5672` |
+| Internal Broker for EP1 | `amqps://eptb1-eccosp-artemis-artemis-eptb1-svc:5672` |
 
-Diese Adressen sind Beispiele fuer die externen Konfigurationen, keine Helm-
-Substitution. Andere Release-/Instanznamen oder Namespaces verlangen andere
-Adressen und passende Zertifikate. ECP-Komponentencodes extern nach dem
-Registrierungsverfahren festlegen, nicht aus Kubernetes-Namen ableiten.
+These addresses are examples for the external configurations, not Helm
+substitutions. Different release/instance names or namespaces require different
+addresses and matching certificates. Define ECP component codes externally
+according to the registration procedure; do not derive them from Kubernetes names.
 
-### 3. Vollstaendige Betreiber-Values vorbereiten
+### 3. Prepare Complete Operator Values
 
-Die oben verlinkten kanonischen Values jeweils vollstaendig kopieren: Directory
-nach `../eccosp-values/cd.yaml`, ECP Broker nach `../eccosp-values/br.yaml`,
-Artemis nach `../eccosp-values/eptb1.yaml` und Endpoint nach
-`../eccosp-values/ep1.yaml`. Diese Dateien werden nicht mitgeliefert.
-Die Default-Instanznamen entsprechen der obigen Tabelle. In jeder Datei
-`instance[0].existingSecret` auf das zugehoerige bereitgestellte Secret setzen
-und die gesamte Konfiguration fuer die Zielumgebung pruefen und anpassen.
-`instance` und `global` bleiben direkt an der Values-Wurzel, ohne Chart-Namenspraefix.
-Keine reduzierten Listen mit nur Name und Secret ueber die Defaults legen.
-Fuer zusaetzliche Instanzen jeweils einen vollstaendigen Eintrag pflegen.
-Eine lokale Helm-Installation ist nur fuer die Ausfuehrung der Beispiele noetig,
-nicht fuer das Lesen oder Anpassen der Values.
+Copy each set of canonical values linked above in full: Directory to
+`../eccosp-values/cd.yaml`, ECP Broker to `../eccosp-values/br.yaml`,
+Artemis to `../eccosp-values/eptb1.yaml`, and Endpoint to
+`../eccosp-values/ep1.yaml`. These files are not supplied.
+The default instance names match the table above. In each file, set
+`instance[0].existingSecret` to the corresponding provisioned Secret,
+and review and adapt the entire configuration for the target environment.
+`instance` and `global` remain directly at the values root, without a chart-name prefix.
+Do not overlay the defaults with reduced lists containing only a name and Secret.
+Maintain a complete entry for each additional instance.
+A local Helm installation is required only to run the examples,
+not to read or modify the values.
 
-### 4. Ohne Cluster linten und rendern
+### 4. Lint and Render Without a Cluster
 
-Jeden Release separat mit seiner vollstaendigen Betreiberdatei pruefen:
+Check each release separately with its complete operator values file:
 
 ```sh
 helm lint ./charts/ecp-directory --namespace eccosp -f ../eccosp-values/cd.yaml
@@ -230,27 +234,27 @@ helm lint ./charts/ecp-endpoint --namespace eccosp -f ../eccosp-values/ep1.yaml
 helm template ep1 ./charts/ecp-endpoint --namespace eccosp -f ../eccosp-values/ep1.yaml
 ```
 
-Namen, Selector, PVCs, Secret-Referenzen, Ports und SecurityContexts pruefen.
-Ein erfolgreicher Render ist keine Cluster-, Registrierungs- oder Funktionspruefung.
-Nur einen Endpoint testen: ausschliesslich dessen Chart und Betreiberdatei verwenden;
-dadurch werden seine extern benoetigten Partner nicht automatisch installiert.
+Check names, selectors, PVCs, Secret references, ports, and SecurityContexts.
+Successful rendering is not a cluster, registration, or functional test.
+To test only one Endpoint, use only its chart and operator values file;
+this does not automatically install the external partners it requires.
 
-Fuer einen reinen lokalen Smoke-Test mit kanonischer Instanzliste vor `--set`:
+For a purely local smoke test, with the canonical instance list supplied before `--set`:
 
 ```sh
 helm lint ./charts/ecp-endpoint --namespace eccosp -f ./charts/ecp-endpoint/values.yaml --set 'instance[0].existingSecret=ecp-endpoint-ep1-config'
 helm template ep1 ./charts/ecp-endpoint --namespace eccosp -f ./charts/ecp-endpoint/values.yaml --set 'instance[0].existingSecret=ecp-endpoint-ep1-config'
 ```
 
-Das explizite `-f` verhindert, dass ein isolierter Listenindex-Override die
-Default-Instanz bis auf den Secret-Namen ersetzt. Entsprechende Standalone-
-Befehle stehen in jedem Chart-README. Dieser Smoke-Test prueft weder das Secret
-noch die Betriebsfaehigkeit; fuer Deployments die geprueften Betreiberdateien nutzen.
+The explicit `-f` prevents an isolated list-index override from replacing the
+default instance with only the Secret name. Corresponding standalone commands
+are provided in each chart README. This smoke test checks neither the Secret
+nor operational readiness; use the reviewed operator values files for deployments.
 
-### 5. Neue Installation und anschliessende Abnahme
+### 5. New Installation and Subsequent Acceptance Testing
 
-Erst nach bereitgestelltem Namespace, befuellten Secrets, vorbereitetem Storage
-und freigegebener externer Konfiguration installieren:
+Install only after the namespace has been provisioned, Secrets populated,
+storage prepared, and external configuration approved:
 
 ```sh
 helm install cd ./charts/ecp-directory --namespace eccosp -f ../eccosp-values/cd.yaml --wait --timeout 15m
@@ -259,282 +263,282 @@ helm install eptb1 ./charts/eccosp-artemis --namespace eccosp -f ../eccosp-value
 helm install ep1 ./charts/ecp-endpoint --namespace eccosp -f ../eccosp-values/ep1.yaml --wait --timeout 15m
 ```
 
-Diese Befehle gelten fuer Single-Instanzen und eine **neue** Installation.
-Jeden Schritt einzeln pruefen; es gibt keine releaseuebergreifende Transaktion
-oder gemeinsamen Rollback. Nicht als Upgrade-/Migrationsrezept verwenden.
-Die Befehle registrieren keine Komponenten.
-Danach kontrolliert PVC-Bindung, Initcontainer, TLS/Authentifizierung, externe
-Datenbank, ECP-Registrierung und einen vollstaendigen Nachrichtenfluss pruefen.
-Partnerfreigaben und Registration-Tool-Ablauf erfolgen ausserhalb des Charts.
-Ein positives Helm-`--wait` ersetzt diese Abnahme nicht.
+These commands apply to single instances and a **new** installation.
+Check each step individually; there is no cross-release transaction or shared
+rollback. Do not use this as an upgrade or migration procedure.
+The commands do not register any components.
+Afterwards, perform controlled checks of PVC binding, init containers,
+TLS/authentication, the external database, ECP registration, and an end-to-end
+message flow. Partner approvals and the Registration Tool procedure take place
+outside the chart. A successful Helm `--wait` does not replace this acceptance testing.
 
-## Storage, Sicherheit und Probes
+## Storage, Security, and Probes
 
-### Persistenz und Ownership
+### Persistence and Ownership
 
-EP/CD nutzen Daten-PVCs und standardmaessig persistente Logs (`keepLogsAfterRestart: true`).
-BR/AR haben Daten-/Keystore- und Journal-Storage; Logs sind standardmaessig fluechtig
-(`false`). BR hat zusaetzlich einen PVC fuer Registration-Tool-Logs. Shared Storage
-ist in allen Single-Defaults aus; Klassen sind leer, Shared-Groessen explizit 1Gi.
-NFS oder eine bestimmte StorageClass wird nicht vorausgesetzt.
+EP/CD use data PVCs and persistent logs by default (`keepLogsAfterRestart: true`).
+BR/AR have data/keystore and journal storage; logs are ephemeral by default
+(`false`). BR also has a PVC for Registration Tool logs. Shared storage is
+disabled in all single-instance defaults; classes are empty, and shared-storage
+sizes are explicitly 1Gi. Neither NFS nor a particular StorageClass is assumed.
 
-Seed-Initcontainer kopieren vorhandene Image-Dateien ohne Ueberschreiben auf die
-Daten-PVCs. Keystores bleiben dort erhalten; diese Initialisierung ist keine
-ECP-Registrierung und keine sichere automatische Zertifikatsrotation. Nicht
-vorhandene bzw. falsche Betriebskeystores extern bereitstellen oder registrieren.
-Beim BR wird der etc-Arbeitsbereich als `emptyDir` initialisiert, die Keystores
-liegen im Datenbereich. AR nutzt fuer etc/Keystores den Daten-PVC.
+Seed init containers copy existing image files to the data PVCs without
+overwriting files. Keystores are retained there; this initialization is neither
+ECP registration nor secure automatic certificate rotation. Provision or register
+missing or incorrect operational keystores externally.
+For BR, the etc working directory is initialized as an `emptyDir`, while keystores
+reside in the data area. AR uses the data PVC for etc/keystores.
 
-Anwendungscontainer laufen standardmaessig als UID/GID 2000 (EP/CD/BR) bzw.
-2030 (AR), ohne Privilege Escalation, mit `RuntimeDefault`-Seccomp und ohne
-Capabilities. Die beiden Seed-/Ownership-Initcontainer laufen dagegen als Root
-mit ausschliesslich `CHOWN`, `FOWNER`, `DAC_OVERRIDE`; sie mounten keine projizierte
-private Konfiguration. Zusaetzliche eigene Container gesondert pruefen.
+Application containers run by default as UID/GID 2000 (EP/CD/BR) or 2030 (AR),
+without privilege escalation, with `RuntimeDefault` seccomp, and without
+capabilities. In contrast, the two seed/ownership init containers run as root
+with only `CHOWN`, `FOWNER`, and `DAC_OVERRIDE`; they do not mount any projected
+private configuration. Review any additional custom containers separately.
 
-**Restricted Pod Security Admission ist damit nicht erfuellt.** Nicht behaupten,
-ein Non-Root-Hauptcontainer mache den gesamten Pod Restricted-kompatibel.
-Bei NFS `root_squash` koennen auch diese Root-Initcontainer an `chown`/`chmod`
-scheitern. Ownership und Rechte deshalb mit dem Storage-Betreiber vorprovisionieren
-und das Init-Verhalten in einer Testumgebung pruefen. Vorprovisionierung allein
-deaktiviert die weiterhin ausgefuehrten Root-Initcontainer nicht; eine strikt
-Restricted-/Root-Squash-Umgebung benoetigt eine separat freigegebene Anpassung
-des Deployment-/Storage-Konzepts, nicht pauschal mehr Rechte.
+**This does not satisfy Restricted Pod Security Admission.** Do not claim that
+a non-root main container makes the entire Pod Restricted-compliant.
+With NFS `root_squash`, even these root init containers can fail on `chown`/`chmod`.
+Therefore, pre-provision ownership and permissions with the storage operator
+and test initialization behavior in a test environment. Pre-provisioning alone
+does not disable the root init containers, which still run; a strictly
+Restricted/root-squash environment requires a separately approved adaptation
+of the deployment/storage design, not a blanket increase in permissions.
 
-### Aussagekraft der Probes
+### What the Probes Establish
 
-Die ausgelieferten Values enthalten pro Probe nur
-`enabled`: Startup und Readiness sind an, Liveness ist aus. Aktionen, Ports und
-Timing-Defaults liegen im jeweiligen `*.probes`-Template-Helper, den das
-StatefulSet einbindet. Die Standardwerte muessen nicht in Values wiederholt werden.
-Bestehende explizite Timing-Overrides bleiben optional unterstuetzt; das
-Standardverhalten aendert sich durch die vereinfachten Values nicht.
+The supplied values contain only `enabled` for each probe:
+startup and readiness are enabled; liveness is disabled. Actions, ports, and
+timing defaults reside in the respective `*.probes` template helper included by
+the StatefulSet. The defaults do not need to be repeated in values.
+Existing explicit timing overrides remain optionally supported; the simplified
+values do not change the default behavior.
 
-| Probe | Default | Bedeutung |
+| Probe | Default | Meaning |
 | --- | --- | --- |
-| Startup | an, 10s Intervall, 2s Timeout, 60 Fehlversuche | EP/CD und Single-Broker: TCP; HA-Broker: nur `kill -0 1` |
-| Readiness | an, 10s Intervall, 2s Timeout, 3 Fehlversuche | TCP auf Web-Port bei EP/CD bzw. AMQP-Port bei BR/AR |
-| Liveness | aus, bei Aktivierung 10s/2s, 3 Fehlversuche | TCP bzw. bei HA-Brokern nur PID-1-Existenz |
+| Startup | enabled, 10s interval, 2s timeout, 60 failures | EP/CD and single brokers: TCP; HA brokers: only `kill -0 1` |
+| Readiness | enabled, 10s interval, 2s timeout, 3 failures | TCP on the web port for EP/CD or the AMQP port for BR/AR |
+| Liveness | disabled; when enabled, 10s/2s, 3 failures | TCP, or only the existence of PID 1 for HA brokers |
 
-Initialverzoegerung ist 0, Erfolgsschwelle 1. Ein erreichbarer TCP-Port beweist
-weder TLS noch Authentifizierung, DB-Verbindung, Registrierung oder fachliche
-Gesundheit. PID 1 kann existieren, obwohl der Broker blockiert ist. Kein robustes
-Full-Health-Monitoring behaupten. `databaseWait` ist nicht unterstuetzt;
-DB-Initialisierung und Wiederverbindung liegen bei Anwendung und Betrieb.
+The initial delay is 0, and the success threshold is 1. A reachable TCP port
+proves neither TLS, authentication, database connectivity, registration, nor
+application-level health. PID 1 can exist even when the broker is blocked. Do not
+claim robust, comprehensive health monitoring. `databaseWait` is not supported;
+database initialization and reconnection are the responsibility of the application
+and operations team.
 
-## High Availability explizit konfigurieren
+## Configure High Availability Explicitly
 
-### EP und CD
+### EP and CD
 
-`replicaCount > 1` verlangt unter `ecpProperties` bzw. `ecpDirectoryProperties`
-ein `springProfilesActive` mit `ecp-ha`, `springDatasourceDriverClassName` und
-eine externe JDBC-URL in `ecpDBUrl`. Diese drei Angaben sind oeffentliche
-Topologie-/Validierungswerte, keine DB-Credentials. URL ohne Zugangsdaten pflegen.
-Treiber werden fuer PostgreSQL, MariaDB/MySQL, SQL Server und Oracle akzeptiert;
-die tatsaechliche Image-/DB-Kombination muss offiziell unterstuetzt sein.
+`replicaCount > 1` requires `springProfilesActive` containing `ecp-ha`,
+`springDatasourceDriverClassName`, and an external JDBC URL in `ecpDBUrl`
+under `ecpProperties` or `ecpDirectoryProperties`, respectively. These three
+settings are public topology/validation values, not database credentials. Keep
+credentials out of the URL. Drivers for PostgreSQL, MariaDB/MySQL, SQL Server,
+and Oracle are accepted; the actual image/database combination must be officially supported.
 
-Die zugehoerige externe Vollkonfiguration muss dasselbe HA-Profil und dieselbe
-DB-Verbindung mit vollstaendigen Credentials enthalten. Keine eingebettete DB
-ueber mehrere Replikate teilen. Session-Replikation verlangt zusaetzlich die
-korrekte Tomcat-Cluster-Konfiguration im externen Server-XML und erreichbares
-Discovery-Netzwerk. Helm rendert diese privaten Einstellungen nicht.
+The corresponding external full configuration must contain the same HA profile
+and database connection with complete credentials. Do not share an embedded
+database across multiple replicas. Session replication additionally requires the
+correct Tomcat cluster configuration in the external server XML and a reachable
+discovery network. Helm does not render these private settings.
 
-### BR und AR: Shared Store
+### BR and AR: Shared Store
 
-Fuer eine neue HA-Instanz die **vollstaendige** Instanzliste anpassen:
+For a new HA instance, modify the **complete** instance list:
 
-| Value | HA-Beispiel / Pflicht |
+| Value | HA Example / Requirement |
 | --- | --- |
 | `replicaCount` | `2` |
 | `useSharedStorageForJournal` | `true` |
 | `useSharedStorageForConfiguration` | `false` |
 | `sharedStorageAccessMode` | `ReadWriteMany` |
-| `sharedStorageClassJournal` | z.B. `rwx-journal`, nur falls diese geeignete Klasse tatsaechlich bereitgestellt wurde |
-| `sharedStorageSizeJournal` | `1Gi` als Startwert, betrieblich dimensionieren |
-| `brokerXml.highAvailability.acceptor.port` | `61616`, muss mit externer Konfiguration uebereinstimmen |
+| `sharedStorageClassJournal` | e.g. `rwx-journal`, only if this suitable class has actually been provisioned |
+| `sharedStorageSizeJournal` | `1Gi` as a starting point; size for operational requirements |
+| `brokerXml.highAvailability.acceptor.port` | `61616`; must match the external configuration |
 
-`rwx-journal` ist ein Beispielname, keine mitgelieferte Klasse. RWX allein
-beweist keine Artemis-Eignung: Dateisperren, Konsistenz, Latenz, Ausfallverhalten
-und Rechte des konkreten Backends pruefen. Nur das Journal wird gemeinsam benutzt;
-Konfiguration und Keystores bleiben pro Pod getrennt. Keine Single-Instanz durch
-blosses Hochskalieren ohne externe HA-Dateien und Storage-Plan in HA umwandeln.
+`rwx-journal` is an example name, not a supplied class. RWX alone does not
+prove suitability for Artemis: check file locking, consistency, latency, failure
+behavior, and permissions of the specific backend. Only the journal is shared;
+configuration and keystores remain separate for each Pod. Do not convert a single
+instance to HA merely by scaling up without external HA files and a storage plan.
 
-Im Secret statt des Single-Keys beide HA-Keys bereitstellen. Die externen XML-
-Dateien benoetigen Shared-Store-Policy, passende Journal-/Paging-/Binding-/Large-
-Message-Pfade, Listener, Credentials und vollstaendige Connectoren. Das oeffentliche
-HA-Skript ersetzt lediglich `MASTER`, `SLAVE1` bis `SLAVE<n>` und im Slave-Dokument
-`SLAVE-REF` durch Pod-Namen und kopiert das ausgewaehlte XML ins Arbeitsverzeichnis.
-Ordinal 0 erhaelt die Master-Konfiguration, weitere Ordinals die Slave-Konfiguration;
-das ist keine Aussage darueber, welcher Broker nach einem Failover aktuell aktiv ist.
-Keine Helm-Ausdruecke in externen Dateien erwarten; Namespace und DNS-Suffixe
-werden dort nicht automatisch eingesetzt. Die reservierten Ersetzungstokens
-nicht in anderen XML-Inhalten verwenden.
+Provide both HA keys in the Secret instead of the single-instance key. The external
+XML files require a shared-store policy, matching journal/paging/binding/large-message
+paths, listeners, credentials, and complete connectors. The public HA script only
+replaces `MASTER`, `SLAVE1` through `SLAVE<n>`, and, in the slave document,
+`SLAVE-REF` with Pod names, then copies the selected XML to the working directory.
+Ordinal 0 receives the master configuration; subsequent ordinals receive the slave
+configuration. This does not indicate which broker is currently active after a failover.
+Do not expect Helm expressions to be evaluated in external files; namespaces and
+DNS suffixes are not inserted automatically. Do not use the reserved replacement
+tokens in other XML content.
 
-Fuer Release `br`, Namespace `eccosp` und Instanz `br` lautet etwa der HA-Pod-DNS-Name
+For release `br`, namespace `eccosp`, and instance `br`, an example HA Pod DNS name is
 `br-ecp-broker-br-0.br-ecp-broker-br-headless-svc.eccosp.svc.cluster.local`.
-Bei abweichender Cluster-Domain extern anpassen. Der Headless-Service publiziert
-auch NotReady-Adressen fuer Discovery; Clients verwenden den normalen `-svc`.
-`service.amqp` wird bei BR/AR abgelehnt. `service.amqps.port` ist der Port-Key;
-ein optionaler `brokerXml.acceptor.port` muss dazu passen. Weder dieser Value
-noch `brokerXml.acceptor.sslEnabled` aendern das externe Broker-XML.
+Adjust this externally if the cluster domain differs. The headless Service also
+publishes NotReady addresses for discovery; clients use the normal `-svc`.
+`service.amqp` is rejected for BR/AR. `service.amqps.port` is the port key;
+an optional `brokerXml.acceptor.port` must match it. Neither this value
+nor `brokerXml.acceptor.sslEnabled` changes the external broker XML.
 
-HA-StatefulSets verwenden `podManagementPolicy: Parallel` und `OnDelete`.
-Passive Backups oeffnen gegebenenfalls keinen AMQP-Listener und bleiben daher
-NotReady. Ein pauschales `helm --wait` kann bei HA bis zum Timeout warten;
-`--atomic` kann daraufhin zurueckrollen. Fuer HA eine separate, rollenbewusste
-Abnahme und einen kontrollierten Wartungsablauf verwenden, nicht die Readiness
-deaktivieren, nur um einen gruenen Rollout zu erzwingen.
+HA StatefulSets use `podManagementPolicy: Parallel` and `OnDelete`.
+Passive backups may not open an AMQP listener and therefore remain NotReady.
+Indiscriminate use of `helm --wait` for HA can wait until the timeout;
+`--atomic` may then roll back. For HA, use separate, role-aware acceptance
+testing and a controlled maintenance procedure; do not disable readiness
+just to force a green rollout.
 
-## Secret-Rotation, JMX und Netzwerk
+## Secret Rotation, JMX, and Networking
 
-1. Neue externe Konfiguration und gegebenenfalls Keystores/Credentials abgestimmt
-   vorbereiten; Rueckweg und Sicherung fuer die alte Version festlegen.
-2. Vorhandenes Secret ueber den freigegebenen Prozess aktualisieren oder ein neues
-   Secret referenzieren. Keine Inhalte in Helm-Values oder Release-Artefakte kopieren.
-3. `secretRevision` der betroffenen Instanz als String erhoehen, z.B. von `'1'`
-   auf `'2'`, und die oeffentliche Release-Konfiguration aktualisieren.
-4. Pods kontrolliert neu starten und die neue Konfiguration fachlich abnehmen.
-   EP/CD und Single-Broker verwenden regulaere StatefulSet-RollingUpdates.
-   HA-Broker mit `OnDelete` verlangen manuelle, einzelne Pod-Ersetzungen.
-   Aktive/passive Rolle zuerst feststellen, Backup-Bereitschaft und Failover
-   pruefen; niemals pauschal alle Pods gleichzeitig loeschen.
+1. Coordinate preparation of the new external configuration and, if needed,
+   keystores/credentials; define a rollback path and backup for the old version.
+2. Update the existing Secret through the approved process or reference a new
+   Secret. Do not copy contents into Helm values or release artifacts.
+3. Increment `secretRevision` for the affected instance as a string, e.g. from `'1'`
+   to `'2'`, and update the public release configuration.
+4. Restart Pods in a controlled manner and perform application-level acceptance
+   testing of the new configuration. EP/CD and single brokers use regular
+   StatefulSet RollingUpdates. HA brokers with `OnDelete` require manual Pod
+   replacements, one at a time. Identify the active/passive roles first, and check
+   backup readiness and failover; never indiscriminately delete all Pods at once.
 
-`checksumConfig: true` erfasst nur die oeffentliche ConfigMap. Die Checksumme
-verfolgt weder Inhalte referenzierter Secrets noch Secrets aus `env`/`extraEnv`
-oder zusaetzlichen Volumes. Secret-`subPath`-Mounts aktualisieren laufende Container
-nicht automatisch; bei HA wird das Arbeits-XML nur im Initcontainer aufbereitet.
-Auch eine geaenderte Checksumme oder `secretRevision` hebt `OnDelete` nicht auf.
+`checksumConfig: true` covers only the public ConfigMap. The checksum tracks
+neither the contents of referenced Secrets nor Secrets from `env`/`extraEnv`
+or additional volumes. Secret `subPath` mounts do not automatically update running
+containers; for HA, the working XML is prepared only in the init container.
+Even a changed checksum or `secretRevision` does not override `OnDelete`.
 
-JMX bleibt bei EP/CD standardmaessig unkonfiguriert. Bei nichtleerem
-`jmxRemoteProperties` sind **beide** zusaetzlichen privaten Keys erforderlich,
-auch wenn einzelne JMX-Schalter false sind. Nur oeffentliche JMX-Optionen und
-`instance[].jmxRemoteUsers: [{login: monitor, access: readonly}]` fuer das
-oeffentliche Access-Mapping in Values pflegen; kein `password`. Die Liste liegt
-direkt an der Instanz, nicht unter `jmxRemotePassword`. Alte verschachtelte
-Benutzerlisten werden nicht mehr ausgewertet. Die externe `jmxremote.password`
-muss zu den Logins dieser Access-Liste passen; Helm prueft diese Zuordnung nicht.
-Passwort-/SSL-Inhalte vollstaendig extern halten.
-Authentifizierung, SSL und Registry-SSL bewusst konfigurieren; separate
-JMX-Netzwerkfreigabe und die Java-Anforderungen an Dateirechte testen.
+JMX remains unconfigured by default for EP/CD. If `jmxRemoteProperties` is
+non-empty, **both** additional private keys are required, even if individual
+JMX switches are false. Keep only public JMX options and
+`instance[].jmxRemoteUsers: [{login: monitor, access: readonly}]` for the public
+access mapping in values; no `password`. The list belongs directly to the instance,
+not under `jmxRemotePassword`. Old nested user lists are no longer evaluated.
+The external `jmxremote.password` must match the logins in this access list;
+Helm does not check this mapping.
+Keep password/SSL contents entirely external.
+Deliberately configure authentication, SSL, and registry SSL; test separate
+JMX network access and compliance with Java's file-permission requirements.
 
-Ingress ist standardmaessig aus. Bei Aktivierung sind Host, Controller und TLS-
-Secret bewusst zu setzen. Bei `ingressClassName: nginx` und HTTPS-Backend wird
-die Backend-Protokoll-Annotation ergaenzt, sofern nicht vorgegeben. Das ersetzt
-keine TLS-/mTLS-Konfiguration der Anwendung. Web-Ingress transportiert nicht
-automatisch AMQP; dafuer einen geeigneten TCP-Zugang planen. Bei BR/AR beeinflusst
-`service.https.host` bzw. `service.http.host` die oeffentliche Jolokia-Origin-Policy;
-diese pruefen, statt sich auf den weit gefassten leeren Default zu verlassen.
+Ingress is disabled by default. When enabling it, explicitly set the host,
+controller, and TLS Secret. With `ingressClassName: nginx` and an HTTPS backend,
+the backend protocol annotation is added unless already specified. This does not
+replace application TLS/mTLS configuration. Web ingress does not automatically
+carry AMQP; plan suitable TCP access for it. For BR/AR, `service.https.host` or
+`service.http.host` affects the public Jolokia origin policy; review this policy
+rather than relying on the permissive empty default.
 
-Alle vier Charts bieten ausserdem optionales Gateway-API-Routing; pro Instanz
-ist `gateway.enabled: false` der Default. Voraussetzungen, Routing und TLS-
-Beispiele stehen in [Gateway_API.md](Gateway_API.md). Die Charts ersetzen damit
-weder die externe Anwendungskonfiguration noch die betriebliche TLS-Abnahme.
+All four charts also offer optional Gateway API routing; the default for each
+instance is `gateway.enabled: false`. Prerequisites, routing, and TLS examples
+are provided in [Gateway_API.md](Gateway_API.md). This does not mean the charts
+replace external application configuration or operational TLS acceptance testing.
 
-## Migration von bisherigen Charts auf 5.0.0
+## Migration from Previous Charts to 5.0.0
 
-### Bisherigen Umbrella in unabhaengige Releases ueberfuehren
+### Convert the Previous Umbrella Chart into Independent Releases
 
-Der fruehere `ecco-sp`-Umbrella wurde entfernt. Alte verschachtelte Komponenten-
-Values nicht unveraendert weiterreichen: Pro Zielrelease die aktuellen
-Standalone-Defaults vollstaendig uebernehmen und die benoetigten Einstellungen
-an deren Wurzel migrieren. Ein Helm-Release laesst sich nicht durch einen normalen
-Upgrade-Aufruf in mehrere Releases aufteilen. Release-Ownership, Ressourcen-
-und PVC-Namen sowie externe DNS-/TLS-Bezuege nach dem gestuften Ablauf pruefen.
-Keine automatische Ressourcenuebernahme oder gefahrlose Deinstallation des
-alten Releases voraussetzen.
+The former `ecco-sp` umbrella chart has been removed. Do not pass old nested
+component values through unchanged: for each target release, adopt the complete
+current standalone defaults and migrate the required settings to their root.
+A Helm release cannot be split into multiple releases through a normal upgrade
+invocation. Check release ownership, resource and PVC names, and external DNS/TLS
+references using the staged procedure. Do not assume automatic adoption of
+resources or that the old release can be safely uninstalled.
 
-### Alte private Values migrieren, nicht weiterreichen
+### Migrate Old Private Values; Do Not Pass Them Through
 
-Die folgende Liste beschreibt alte Schluesselgruppen, keinen neuen Values-
-Katalog. Nicht mehr benoetigte private Schluessel aus Betreiber-Values entfernen;
-ihre vollstaendige Laufzeitkonfiguration extern verwalten. Auch scheinbar
-oeffentliche Einzelwerte innerhalb einer privaten Vollfile werden nicht mehr
-in die extern eingebundene Datei uebertragen.
+The following list describes old key groups, not a new values catalog.
+Remove private keys that are no longer needed from operator values;
+manage their full runtime configuration externally. Even apparently public
+individual values within a complete private configuration file are no longer
+transferred to the externally mounted file.
 
-| Alte Values / Gruppen | Neues Ziel und Besonderheit |
+| Old Values / Groups | New Destination and Specific Considerations |
 | --- | --- |
-| EP `ecpProperties`, CD `ecpDirectoryProperties` | Vollstaendige jeweilige Properties-Datei im Secret; nur oben genannte Pfad-/Profil-/HA-/Gruppenwerte in Values behalten |
-| `ecpKeystorePassword`, `ecpAuthKeystorePassword`, `ecpDBKeystorePassword`, CD `ecpDirectoryRegKeystorePassword`, `ecpDirectoryCAKeystorePassword` und zugehoerige Locations | Externe Properties und Server-/Broker-XML konsistent zu PVC-Keystores setzen |
-| `ecpDBUsername`, `ecpDBPassword`, Datasource-/DBCP2-Optionen, Validation Query | Externe DB-Konfiguration; bei HA nur URL ohne Credentials und Treiber zusaetzlich fuer die Validierung behalten |
-| `ecpDBHostname`, `ecpDBName`, `databaseWait` und globale MySQL-/MsSQL-/Postgres-/Oracle-Client-Images | Keine DB-Wartecontainer mehr; keine Readiness-Garantie fuer Datenbanken |
-| `internalBrokerHost`, `internalBrokerUrls`, Ports, Authentifizierung, Keystore-, Queue- und Verbindungsparameter | EP-Vollkonfiguration extern; nur `internalBrokerAuthUser` fuer das oeffentliche Gruppenmapping bleibt |
-| `ecpCsrfSecret`, Jasypt-Algorithmus, `ecpPasswordProperties.encryptionPassword` | Extern generierte/verwaltete Werte; alten festen CSRF-Wert und bekannte Default-Passwoerter ersetzen |
-| `ecpUsersProperties.ecpEndpointUsers`, `ecpUsersProperties.ecpDirectoryUsers`, `usersProperties.users[].password` | Externe Benutzerdateien; EP-Gruppenmitglieder bei Bedarf nur mit Login oeffentlich; CD-Rolle darf gemaess offizieller Konfiguration leer bleiben |
-| `jmxRemotePassword`, `jmxRemoteSsl` inklusive Benutzerpasswoertern und Keystore-/Truststore-Passwoertern | Externe JMX-Vollfiles; nur Login-/Access-Zuordnung nach `instance[].jmxRemoteUsers` migrieren, passende externe Passwortdatei bereitstellen |
-| LDAP, SOCKS-Proxy, NAT, AMQP-API/SendHandler, FSSF, Prioritaeten, Brokerparameter, Parallelitaet, Content-Storage, Synchronisations-/Registrierungs-/Cleaning-Jobs, Directory-Zugriff/TTL, UI-Theme | Externe EP-/CD-Properties; keine Wirkung alter Values auf die gemounteten Vollfiles |
-| Actuator-/Prometheus-/Health-Threshold-Properties, `springJmxEnabled`, Automatic-Update-Optionen | Externe Laufzeitkonfiguration; nicht mit Kubernetes-Probes verwechseln |
-| BR `brokerProperties` einschliesslich Kontaktdaten, Netzwerken, Filtern, ECP-Code, Directory-URL/-Code und Registrierungs-ID | Vollstaendige externe Broker-Properties; Registrierung und Aktualisierung der Ergebnisse ausserhalb von Helm |
-| BR/AR `artemisUsers[].password`, Default-User/-Password | Externe Artemis-Benutzerdatei; `artemisUsers` nur Login fuer Rollenmapping |
-| AR `artemisKeystoreLocation`, `artemisKeystorePassword` | Externes Bootstrap-/Broker-XML und passende PVC-Keystores |
-| BR/AR `brokerXml.default`, Journal, CriticalAnalyzer, AddressSettings, Acceptor-TLS/Properties, Audit-/ECP-Kennung, `maskPassword`, Codec/Key, Cluster-User/-Password | Externes Single- oder Master-/Slave-XML; in Values nur benoetigte Port-/Topologiepruefungen behalten |
-| BR/AR `prometheusEnabled` und Web-Bootstrap-Optionen | Externes Broker-/Bootstrap-XML; der Value schaltet im externen Dokument nichts um |
-| Alter EP-Bootstrap-Custom-Mount auf einen fremden Artemis-Pfad | Entfernen; nicht Bestandteil der Endpoint-Grundkonfiguration |
+| EP `ecpProperties`, CD `ecpDirectoryProperties` | Complete corresponding properties file in the Secret; retain only the path/profile/HA/group values listed above in values |
+| `ecpKeystorePassword`, `ecpAuthKeystorePassword`, `ecpDBKeystorePassword`, CD `ecpDirectoryRegKeystorePassword`, `ecpDirectoryCAKeystorePassword` and associated locations | Configure external properties and server/broker XML consistently with PVC keystores |
+| `ecpDBUsername`, `ecpDBPassword`, datasource/DBCP2 options, validation query | External database configuration; for HA, additionally retain only the credential-free URL and driver for validation |
+| `ecpDBHostname`, `ecpDBName`, `databaseWait` and global MySQL/MsSQL/Postgres/Oracle client images | No more database-wait containers; no database readiness guarantee |
+| `internalBrokerHost`, `internalBrokerUrls`, ports, authentication, keystore, queue, and connection parameters | Full EP configuration is external; only `internalBrokerAuthUser` remains for public group mapping |
+| `ecpCsrfSecret`, Jasypt algorithm, `ecpPasswordProperties.encryptionPassword` | Externally generated/managed values; replace the old fixed CSRF value and known default passwords |
+| `ecpUsersProperties.ecpEndpointUsers`, `ecpUsersProperties.ecpDirectoryUsers`, `usersProperties.users[].password` | External user files; if needed, expose only logins for EP group members; the CD role may remain empty in accordance with the official configuration |
+| `jmxRemotePassword`, `jmxRemoteSsl`, including user passwords and keystore/truststore passwords | Complete external JMX files; migrate only the login/access mapping to `instance[].jmxRemoteUsers`, and provide a matching external password file |
+| LDAP, SOCKS proxy, NAT, AMQP API/SendHandler, FSSF, priorities, broker parameters, parallelism, content storage, synchronization/registration/cleaning jobs, Directory access/TTL, UI theme | External EP/CD properties; old values have no effect on the mounted complete configuration files |
+| Actuator/Prometheus/health-threshold properties, `springJmxEnabled`, automatic-update options | External runtime configuration; do not confuse with Kubernetes probes |
+| BR `brokerProperties`, including contact details, networks, filters, ECP code, Directory URL/code, and registration ID | Complete external broker properties; registration and updates to its results take place outside Helm |
+| BR/AR `artemisUsers[].password`, default user/password | External Artemis user file; `artemisUsers` contains only logins for role mapping |
+| AR `artemisKeystoreLocation`, `artemisKeystorePassword` | External bootstrap/broker XML and matching PVC keystores |
+| BR/AR `brokerXml.default`, Journal, CriticalAnalyzer, AddressSettings, acceptor TLS/properties, audit/ECP identifier, `maskPassword`, codec/key, cluster user/password | External single-instance or master/slave XML; retain only required port/topology checks in values |
+| BR/AR `prometheusEnabled` and web bootstrap options | External broker/bootstrap XML; the value does not toggle anything in the external document |
+| Old EP bootstrap custom mount targeting an unrelated Artemis path | Remove; not part of the base Endpoint configuration |
 
-Alte Defaults koennen in bisherigen Helm-Release-Secrets, ConfigMaps, Backups oder
-Git-Historie verbleiben. Die Migration loescht diese Historie nicht automatisch.
-Zugriff, Aufbewahrung und notwendige Rotation kompromittierter/bekannter Werte
-mit dem Sicherheitsbetrieb abstimmen, ohne fuer einen Rollback benoetigte
-Backups unkontrolliert zu vernichten. Kein `--reuse-values` fuer diese Migration.
+Old defaults may remain in previous Helm release Secrets, ConfigMaps, backups,
+or Git history. Migration does not automatically delete this history.
+Coordinate access, retention, and any necessary rotation of compromised/known
+values with security operations, without indiscriminately destroying backups
+needed for rollback. Do not use `--reuse-values` for this migration.
 
-### Gestufter Ablauf mit PVC-Erhalt
+### Staged Procedure with PVC Preservation
 
-1. **Inventarisieren:** alten Release-Namen, Namespace, Chart-/Image-Versionen,
-   komplette Values, Live-Manifeste, Selector, StatefulSet-ServiceName,
-   ClaimTemplate-Namen, PVC-/PV-Bindungen, StorageClass/ReclaimPolicy und
-   Registrierungsidentitaeten gesichert erfassen. Private Exporte nicht ins Repo.
-2. **Konsistent sichern:** Datenbanken, Daten-PVCs, Journal, Keystores,
-   Registrierungsdaten und benoetigte Logs sichern. Snapshot-/Backup-Konsistenz
-   bei aktiven Schreibern klaeren; Restore auf getrennten Volumes testen.
-3. **Ziel rendern und vergleichen:** Namen entstehen aus Release, Chart und
-   Instanz. Basen mit mehr als 45 Zeichen werden gekuerzt und mit Hash ergaenzt.
-   `fullnameOverride` akzeptiert maximal 45 Zeichen, garantiert aber **kein**
-   kompatibles Upgrade. Selector enthalten nun auch `app.kubernetes.io/instance`;
-   Headless-Service und StatefulSet-`serviceName` sowie ClaimTemplate-/PVC-Namen
-   koennen sich geaendert haben. Diese Felder sind teilweise unveraenderlich.
-4. **PVC-Zuordnung planen:** Ein Claim heisst z.B.
-   `data-ep1-ecp-endpoint-ep1-0`, ein Shared-Journal-Claim z.B.
-   `br-ecp-broker-br-journal-claim`. Alte PVCs werden nicht anhand ihres
-   Inhalts automatisch gefunden. Neue Namen nicht einfach auf leere Volumes
-   zeigen lassen. Kontrolliertes Restore oder explizite PV/PVC-Neuzuordnung mit
-   dem Storage-Betreiber planen; Daten-PVCs und Shared-PVCs separat behandeln.
-5. **Getrennt erproben:** neue Ressourcen auf isolierten Test-/Restore-Volumes
-   mit externen Secrets starten. Keine parallelen produktiven Schreiber auf
-   demselben Journal/DB-Zustand und keine doppelt aktiven ECP-Identitaeten erzeugen.
-   Registrierung, TLS, DB, Benutzer, Neustart, Nachrichtenfluss und bei HA
-   Failover/Failback pruefen. Name-/Topologieaenderungen auch extern nachziehen.
-6. **Kontrollierter Cutover:** Wartungsfenster, Nachrichten-/Schreibstopp,
-   finales konsistentes Backup und Abnahmekriterien festlegen. Falls ein
-   StatefulSet neu erstellt werden muss, Erhalt der PVCs/PVs vorab sicherstellen.
-   Kein pauschales `helm uninstall`, `--force` oder Loeschen aller PVCs als
-   vermeintliche Reparatur. Erst nach Restore und Pruefung Verkehr umschalten.
-7. **Rueckweg erhalten:** alte Ressourcen/Backups bis zur Abnahme aufbewahren.
-   Bei Fehlern Schreibzugriffe stoppen und abgestimmten Restore/Routing-Rollback
-   durchfuehren. Ein `helm rollback` macht DB-/Journal-/Keystore-Aenderungen
-   nicht automatisch rueckgaengig. Aufraeumen erst nach erfolgreicher Abnahme.
+1. **Take inventory:** securely record the old release name, namespace, chart/image
+   versions, complete values, live manifests, selectors, StatefulSet ServiceName,
+   ClaimTemplate names, PVC/PV bindings, StorageClass/ReclaimPolicy, and
+   registration identities. Do not put private exports in the repository.
+2. **Create consistent backups:** back up databases, data PVCs, the journal, keystores,
+   registration data, and required logs. Establish snapshot/backup consistency
+   while writers are active; test restoration on separate volumes.
+3. **Render and compare the target:** names are derived from the release, chart,
+   and instance. Base names longer than 45 characters are truncated and given a hash.
+   `fullnameOverride` accepts a maximum of 45 characters but does **not** guarantee
+   a compatible upgrade. Selectors now also include `app.kubernetes.io/instance`;
+   the headless Service and StatefulSet `serviceName`, as well as ClaimTemplate/PVC
+   names, may have changed. Some of these fields are immutable.
+4. **Plan PVC mappings:** an example claim name is
+   `data-ep1-ecp-endpoint-ep1-0`; an example shared-journal claim is
+   `br-ecp-broker-br-journal-claim`. Old PVCs are not discovered automatically
+   based on their contents. Do not simply let new names point to empty volumes.
+   Plan a controlled restore or explicit PV/PVC reassignment with the storage
+   operator; handle data PVCs and shared PVCs separately.
+5. **Test in isolation:** start new resources on isolated test/restore volumes
+   with external Secrets. Do not create parallel production writers against the
+   same journal/database state or duplicate active ECP identities. Test registration,
+   TLS, the database, users, restarts, message flow, and, for HA, failover/failback.
+   Apply name/topology changes to external configurations as well.
+6. **Controlled cutover:** define the maintenance window, message/write suspension,
+   final consistent backup, and acceptance criteria. If a StatefulSet must be
+   recreated, ensure PVC/PV preservation beforehand. Do not indiscriminately use
+   `helm uninstall`, `--force`, or deletion of all PVCs as a supposed fix.
+   Switch traffic only after restoration and verification.
+7. **Preserve a rollback path:** retain old resources/backups until acceptance.
+   If errors occur, stop writes and perform the agreed restore/routing rollback.
+   A `helm rollback` does not automatically undo database/journal/keystore changes.
+   Clean up only after successful acceptance testing.
 
-Auch der Wechsel von Single zu HA kann unveraenderliche StatefulSet-Felder und
-PVC-Layouts betreffen. Diesen Wechsel wie eine Topologiemigration planen, nicht
-nur als Aenderung von `replicaCount`.
+Switching from single-instance operation to HA can also affect immutable
+StatefulSet fields and PVC layouts. Plan this switch as a topology migration,
+not merely a change to `replicaCount`.
 
-## CI und Grenzen der Nachweise
+## CI and Limits of Validation
 
-Die [../.github/workflows/lint.yml](../.github/workflows/lint.yml) prueft alle vier
-Standalone-Charts ohne Cluster: Fixture-/Assertion-Tests,
-Lint, Rendern, Manifestvalidierung sowie Source- und Paket-Tests.
-Uploads enthalten synthetische Testartefakte und
-validierte Pakete, keine realen Secrets. Keine produktiven Konfigurationen in
-Fixtures, Render-Ausgaben oder CI-Uploads einschleusen.
+The [../.github/workflows/lint.yml](../.github/workflows/lint.yml) workflow checks
+all four standalone charts without a cluster: fixture/assertion tests,
+linting, rendering, manifest validation, and source and package tests.
+Uploads contain synthetic test artifacts and validated packages, not real
+Secrets. Do not introduce production configurations into fixtures, rendered
+output, or CI uploads.
 
-Fuer gerenderte `HTTPRoute`- und `BackendTLSPolicy`-Ressourcen werden die benoetigten
-Gateway-API-CRD-Quellen der gepinnten Version **v1.4.1** ueber verifiziertes HTTPS
-geladen und vor dem Parsen gegen fest hinterlegte SHA-256-Pruefsummen geprueft.
-Daraus erzeugte strikte Schemas dienen der clusterfreien Manifestvalidierung.
-Kubernetes-CEL-Regeln werden dabei nicht ausgefuehrt; dies ist weder ein
-Controller-/Laufzeittest noch ein Test gegen einen Cluster.
+For rendered `HTTPRoute` and `BackendTLSPolicy` resources, the required
+Gateway API CRD sources for the pinned version **v1.4.1** are downloaded over
+verified HTTPS and checked against hard-coded SHA-256 checksums before parsing.
+Strict schemas generated from these sources are used for cluster-free manifest
+validation. Kubernetes CEL rules are not executed; this is neither a
+controller/runtime test nor a test against a cluster.
 
-Die [../.github/workflows/Release Charts.yml](../.github/workflows/Release%20Charts.yml)
-veroeffentlicht erst nach erfolgreicher Validierung die vier validierten Pakete.
-Die aktuellen Chart-Versionen bleiben 5.0.0; eine gemeinsame Dependency-Version
-ist fuer die unabhaengigen Charts nicht erforderlich.
-CI beweist keine Image-Verfuegbarkeit, Cluster-Admission, Storage-Eignung,
-Registrierung, TLS-/DB-Funktion oder HA-Ausfallsicherheit. Diese Nachweise
-bleiben Aufgabe der anschliessenden Test- und Betriebsabnahme.
+The [../.github/workflows/Release Charts.yml](../.github/workflows/Release%20Charts.yml)
+workflow publishes the four validated packages only after successful validation.
+The current chart versions remain 5.0.0; a shared dependency version is not
+required for the independent charts.
+CI does not prove image availability, cluster admission, storage suitability,
+registration, TLS/database functionality, or HA resilience. These checks remain
+the responsibility of subsequent testing and operational acceptance.

@@ -1,95 +1,98 @@
-# ECP Broker - Helm Chart 5.0.0
+# ECP Broker - Helm Chart
 
-Standalone-Chart fuer ECP Broker 4.17.0, Helm 3 und Kubernetes >= 1.28.
-Oeffentliche Defaults: [values.yaml](values.yaml).
+Standalone chart for ECP Broker 4.17.0, Helm 3, and Kubernetes >= 1.28.
+Public defaults: [values.yaml](values.yaml).
 
-## Pflicht: externe Vollkonfiguration
+Versioned packages instead of a local checkout:
+[Helm Repository and Quickstart](../../Dokumentation/Helm_Repository.md).
 
-Jede aktivierte Instanz benoetigt `existingSecret` im Release-Namespace.
-Der leere Default laesst Standalone-Lint/Render absichtlich scheitern.
-Der Chart erzeugt kein Secret; ein erfolgreicher Render prueft dessen Inhalt nicht.
+## Required: Complete External Configuration
 
-| Secret-Key | Verwendung |
+Each enabled instance requires `existingSecret` in the release namespace.
+The empty default intentionally causes standalone linting/rendering to fail.
+The chart does not create a Secret; successful rendering does not validate its contents.
+
+| Secret Key | Usage |
 | --- | --- |
 | `broker.properties` | /opt/ecp-broker/config/broker.properties |
 | `artemis-users.properties` | /opt/ecp-broker/broker/etc/artemis-users.properties |
-| `bootstrap.xml` | Bei HTTP/HTTPS-Service: /opt/ecp-broker/broker/etc/bootstrap.xml |
+| `bootstrap.xml` | With an HTTP/HTTPS Service: /opt/ecp-broker/broker/etc/bootstrap.xml |
 | `broker.xml` | Single: /opt/ecp-broker/broker/etc/broker.xml |
-| `broker-master.xml`, `broker-slave.xml` | HA statt `broker.xml`: Eingaben fuer den nichtprivilegierten HA-Initcontainer |
+| `broker-master.xml`, `broker-slave.xml` | HA instead of `broker.xml`: Inputs for the unprivileged HA init container |
 
-Die Default-Values haben HTTPS aktiviert; daher ist `bootstrap.xml` hier Pflicht.
-Dateien vollstaendig nach offizieller ECP-Konfiguration ausserhalb des Repositorys
-erstellen. AMQPS-Port 5671, Web-Port 8161, TLS/Client-Authentifizierung, Benutzer,
-Keystore-Pfade, ECP-Code und Directory-/Registrierungsdaten extern abstimmen.
-`artemisUsers` enthaelt nur Logins fuer das oeffentliche `amq`-Rollenmapping,
-keine Passwoerter und keine automatische Kontoanlage.
+The default values enable HTTPS, so `bootstrap.xml` is required here.
+Create complete files outside the repository according to the official ECP configuration.
+Coordinate AMQPS port 5671, web port 8161, TLS/client authentication, users,
+keystore paths, ECP code, and Directory/registration data externally.
+`artemisUsers` contains only logins for the public `amq` role mapping,
+not passwords, and does not create accounts automatically.
 
-Alte `brokerProperties`, private `brokerXml`-Felder, Passwort- und
-`prometheusEnabled`-Values aendern die externen Vollfiles nicht. Insbesondere
-aktiviert ein Value keine TLS- oder Metrik-Konfiguration im externen XML.
-Das benannte `configuration`-Template rendert nur oeffentliche Konfiguration.
-Private Vollfiles werden auch intern gar nicht gerendert; private Legacy-
-Datensektionen und Dummy-Werte sind entfernt. Die `omit`-Listen in `publicConfig`
-und der ConfigMap-Ausgabe bleiben defensiver Schutz fuer reservierte private
-Datei-Keys, keine Validierung externer Secret-Inhalte.
+Old `brokerProperties`, private `brokerXml` fields, password values, and
+`prometheusEnabled` values do not modify the complete external files. In particular,
+a value does not enable TLS or metrics configuration in the external XML.
+The named `configuration` template renders only public configuration.
+Complete private files are not rendered at all, even internally; private legacy
+data sections and dummy values have been removed. The `omit` lists in `publicConfig`
+and the ConfigMap output remain a defensive safeguard for reserved private
+file keys, not a validation of external Secret contents.
 
-## Oeffentliche Defaults
+## Public Defaults
 
-- Eine Replik, ClusterIP, UID/GID/fsGroup 2000; Image-Tag `'4.17.0'`.
-- `env.resourcesJvm`: JVM-Heap in der oeffentlichen Artemis-Startkonfiguration.
-- Daten- und Journal-PVC je 1Gi; separate Registration-Tool-Logs 64Mi.
-  Dieser Logs-PVC bedeutet nicht, dass der Chart eine Registrierung ausfuehrt.
-- `keepLogsAfterRestart: false`: Broker-Logs auf `emptyDir`; bei `true` eigener PVC.
-- Shared Journal und Shared Configuration sind aus, beide Klassen leer.
-  Keine NFS-Annahme. HA-Groessen stehen explizit auf 1Gi.
-- `brokerXml.highAvailability.acceptor.port` steuert den HA-Port von Pod und
-  Headless-Service; der Wert muss auch im externen XML stimmen.
-- Startup/Readiness aktiv, Liveness aus; jeweils 10s/2s, Startup-Schwelle 60.
+- One replica, ClusterIP, UID/GID/fsGroup 2000; image tag `'4.17.0'`.
+- `env.resourcesJvm`: JVM heap in the public Artemis startup configuration.
+- Data and journal PVCs: 1Gi each; separate registration tool logs: 64Mi.
+  This logs PVC does not mean that the chart performs registration.
+- `keepLogsAfterRestart: false`: Broker logs on `emptyDir`; a dedicated PVC when `true`.
+- Shared journal and shared configuration are disabled; both storage classes are empty.
+  No NFS assumption. HA sizes are explicitly set to 1Gi.
+- `brokerXml.highAvailability.acceptor.port` controls the HA port of the Pod and
+  headless Service; the value must also be correct in the external XML.
+- Startup/readiness enabled, liveness disabled; interval 10s/timeout 2s for each, startup threshold 60.
 
-Single-Probes und HA-Readiness pruefen nur TCP, nicht TLS, Authentifizierung oder
-Nachrichtentransport. HA-Startup/Liveness pruefen nur PID 1. Das ist keine robuste
-fachliche Gesundheitspruefung; passive Backups koennen absichtlich NotReady sein.
+Single-instance probes and HA readiness check only TCP, not TLS, authentication, or
+message transport. HA startup/liveness check only PID 1. This is not a robust
+application-level health check; passive backups may intentionally be NotReady.
 
-## Ingress und Gateway API
+## Ingress and Gateway API
 
-Ingress bleibt verfuegbar; alternativ erzeugt `instance[].gateway.enabled: true`
-eine HTTPRoute fuer den Web-Service. Bei HTTPS wird zusaetzlich eine
-BackendTLSPolicy v1 mit explizitem Backend-Zertifikatsnamen und CA-Vertrauen erzeugt.
-Gateway/Controller/CRDs muessen bereits existieren. AMQP(S) wird nicht geroutet.
-Beide Zugangswege sind standardmaessig aus und fuer Migration parallel nutzbar.
-[Gateway-Konfiguration und TLS-Voraussetzungen](../../Dokumentation/Gateway_API.md).
+Ingress remains available; alternatively, `instance[].gateway.enabled: true` creates
+an HTTPRoute for the web Service. For HTTPS, a
+BackendTLSPolicy v1 with an explicit backend certificate name and CA trust is also created.
+The Gateway/controller/CRDs must already exist. AMQP(S) is not routed.
+Both access methods are disabled by default and can be used in parallel for migration.
+[Gateway Configuration and TLS Prerequisites](../../Dokumentation/Gateway_API.md).
 
-## Standalone pruefen
+## Standalone Validation
 
-Aus dem Repository-Root, ohne Clusterzugriff:
+From the repository root, without cluster access:
 
 ```sh
 helm lint ./charts/ecp-broker --namespace eccosp -f ./charts/ecp-broker/values.yaml --set 'instance[0].existingSecret=ecp-broker-br-config'
 helm template platform ./charts/ecp-broker --namespace eccosp -f ./charts/ecp-broker/values.yaml --set 'instance[0].existingSecret=ecp-broker-br-config'
 ```
 
-`-f` laedt die vollstaendige Liste vor `--set`; ein isolierter Listenindex-Override
-ersetzt sonst die Chart-Default-Liste. Service: `platform-ecp-broker-br-svc`.
-`service.amqp` wird abgelehnt; `service.amqps.port` ist der unterstuetzte Port-Key.
-Der Key allein aktiviert keine Verschluesselung im externen Broker-XML.
+`-f` loads the complete list before `--set`; otherwise, an isolated list-index override
+replaces the chart default list. Service: `platform-ecp-broker-br-svc`.
+`service.amqp` is rejected; `service.amqps.port` is the supported port key.
+The key alone does not enable encryption in the external broker XML.
 
-## HA, Rotation und Migration
+## HA, Rotation, and Migration
 
-Mehrere Replikate erfordern Shared Journal, eine explizite geeignete RWX-Klasse,
-`ReadWriteMany` und `useSharedStorageForConfiguration: false`.
-Keystores bleiben pro Pod auf PVCs; der etc-Arbeitsbereich ist ein `emptyDir`.
-Externes Master-/Slave-XML muss Headless-DNS, Ports, Shared-Store-Pfade und die
-Platzhalter fuer die HA-Initialisierung korrekt enthalten. Details siehe zentrale Anleitung.
+Multiple replicas require a shared journal, an explicit suitable RWX storage class,
+`ReadWriteMany`, and `useSharedStorageForConfiguration: false`.
+Keystores remain on per-Pod PVCs; the etc working directory is an `emptyDir`.
+External master/slave XML must correctly specify headless DNS, ports, shared-store paths, and
+the placeholders for HA initialization. See the central guide for details.
 
-HA verwendet `Parallel` und `OnDelete`. Secret-Aenderung -> `secretRevision`
-erhoehen, anschliessend kontrollierte manuelle Pod-Neustarts. Auch oeffentliche
-Checksummen loesen bei `OnDelete` keinen automatischen Austausch laufender Pods aus.
-Helm prueft externe Secret-Inhalte nicht und registriert keine ECP-Komponenten.
+HA uses `Parallel` and `OnDelete`. Secret change -> increment `secretRevision`,
+then perform controlled manual Pod restarts. Even public
+checksums do not trigger automatic replacement of running Pods with `OnDelete`.
+Helm does not check external Secret contents or register ECP components.
 
-Root-Initcontainer fuer Seed/Ownership sind trotz Least-Capabilities nicht mit
-Restricted PSA kompatibel. `root_squash`, Ownership und Journal-Locking vorab
-mit dem Storage-Betreiber klaeren. Vor 5.0.0 kein blindes Upgrade und kein
-Vertrauen auf `fullnameOverride` allein: Selector-/Headless-/PVC-Aenderungen
-verlangen Backup/Restore und gestufte Migration.
+Root init containers for seeding/ownership are not compatible with
+Restricted PSA despite using minimal capabilities. Clarify `root_squash`, ownership, and journal locking
+with the storage operator beforehand. Do not blindly upgrade from versions before 5.0.0 or
+rely on `fullnameOverride` alone: Selector/headless Service/PVC changes
+require backup/restore and staged migration.
 
 [../../Dokumentation/Helm_Charts.md](../../Dokumentation/Helm_Charts.md)

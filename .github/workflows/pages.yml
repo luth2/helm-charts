@@ -1,0 +1,85 @@
+name: Documentation and Helm Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+    - 'README.md'
+    - 'Dokumentation/**'
+    - 'mkdocs.yml'
+    - '.github/pages/**'
+    - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+    - 'README.md'
+    - 'Dokumentation/**'
+    - 'charts/**'
+    - 'mkdocs.yml'
+    - '.github/pages/**'
+    - '.github/workflows/pages.yml'
+  workflow_run:
+    workflows: [ Release Charts ]
+    types: [ completed ]
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+# Serialize Pages deployments; chart-releaser remains the only gh-pages writer.
+concurrency:
+  group: pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: >-
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v7.0.1
+      with:
+        # Never execute code or consume artifacts from an untrusted workflow_run.
+        # Deployment always builds current main, PRs only validate their merge ref.
+        ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+        persist-credentials: false
+    - uses: actions/checkout@v7.0.1
+      with:
+        ref: gh-pages
+        path: .ci-artifacts/helm-repository
+        persist-credentials: false
+    - uses: actions/setup-python@v7.0.0
+      with:
+        python-version: '3.12'
+        cache: pip
+        cache-dependency-path: .github/pages/requirements.txt
+    - name: Install documentation dependencies
+      run: python -m pip install --disable-pip-version-check -r .github/pages/requirements.txt
+    - name: Test staging and Helm payload preservation
+      run: python -m unittest discover -s .github/pages -p 'test_*.py' -v
+    - name: Build documentation from canonical Markdown and chart metadata
+      run: |
+        python .github/pages/build_portal.py stage --helm-repository .ci-artifacts/helm-repository
+        python -m mkdocs build --strict
+    - name: Combine website and unchanged Helm repository
+      run: python .github/pages/build_portal.py merge --helm-repository .ci-artifacts/helm-repository
+    - name: Upload complete Pages artifact
+      if: github.event_name != 'pull_request'
+      uses: actions/upload-pages-artifact@v4
+      with:
+        path: .ci-artifacts/pages/publish
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - name: Deploy documentation and Helm repository together
+      id: deployment
+      uses: actions/deploy-pages@v4

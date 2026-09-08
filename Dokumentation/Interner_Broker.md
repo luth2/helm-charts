@@ -1,107 +1,107 @@
-# Interner Broker
+# Internal Broker
 
-Offizielle Quelle:
+Official source:
 
 - [Internal Broker Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/internal-broker-manual)
 - [ECCo SP Documents](https://eccosp-docs.entsoe.eu/k)
 
-## Zweck
+## Purpose
 
-Der interne Broker stellt die Messaging-Dienste fuer die interne Nachrichtenverarbeitung innerhalb des Endpoints bereit. Ohne diese Anbindung kann ein Endpoint Nachrichten nicht verarbeiten.
+The Internal Broker provides the messaging services for internal message processing within the Endpoint. Without this connection, an Endpoint cannot process messages.
 
-## Rolle im Gesamtsystem
+## Role in the Overall System
 
-Der interne Broker ist eine Infrastrukturkomponente fuer die interne Kommunikation.
+The Internal Broker is an infrastructure component for internal communication.
 
-- Er entkoppelt Verarbeitungsschritte innerhalb des Endpoint-Betriebs.
-- Mehrere Endpoints koennen an eine gemeinsame Instanz angebunden werden.
-- Auch Business-Anwendungen koennen ihn verwenden, wenn die Integration ueber den AMQP-Kanal erfolgt.
+- It decouples processing steps within Endpoint operation.
+- Multiple Endpoints can connect to a shared instance.
+- Business applications can also use it when integrating through the AMQP channel.
 
-## Technischer Aufbau laut Doku
+## Technical Architecture According to the Documentation
 
-Die offizielle Dokumentation beschreibt zwei Kernbestandteile:
+The official documentation describes two core components:
 
-- einen AMQP-Broker auf Basis von ActiveMQ Artemis
-- ein ECCo SP Audit Logger Plugin fuer Audit-Logging bei Verbindungen sowie beim Senden und Konsumieren von Nachrichten
+- An AMQP broker based on ActiveMQ Artemis
+- An ECCo SP Audit Logger Plugin for audit logging of connections and of message sending and consumption
 
-## Betriebsrelevante Punkte
+## Operational Considerations
 
-- Die Verbindung des Endpoints zum internen Broker ist obligatorisch.
-- Mehrere Endpoints koennen sich eine Instanz teilen, wenn Queue-Namen sauber per Prefix getrennt werden.
-- Der Fokus liegt weniger auf externer Teilnehmerkommunikation und staerker auf robuster interner Verarbeitung und Nachvollziehbarkeit.
+- The Endpoint's connection to the Internal Broker is mandatory.
+- Multiple Endpoints can share an instance if queue names are clearly separated by prefixes.
+- The focus is less on communication with external participants and more on robust internal processing and traceability.
 
-## Bezug zum Helm-Repository
+## Relationship to the Helm Repository
 
-Im Repository wird der interne Broker ueber das Artemis-Chart abgebildet.
+In this repository, the Internal Broker is represented by the Artemis chart.
 
 - Chart: `charts/eccosp-artemis`
-- Beispiel-Values: `ecco-sp/values-eccosp-artemis-eptb1.yaml`, `ecco-sp/values-eccosp-artemis-eptb2.yaml`
+- Example values: `ecco-sp/values-eccosp-artemis-eptb1.yaml`, `ecco-sp/values-eccosp-artemis-eptb2.yaml`
 
-## Installationsanleitung auf VM
+## VM Installation Guide
 
-### Zielbild
+### Target Setup
 
-Der interne Broker wird als lokale oder zentrale interne Messaging-Komponente auf einer VM betrieben. Er stellt ueblicherweise bereit:
+The Internal Broker runs on a VM as a local or central internal messaging component. It typically provides:
 
-- AMQPS fuer den Endpoint auf Port 5672
-- HTTPS fuer Administration bzw. Konsole auf Port 8161
+- AMQPS for the Endpoint on port 5672
+- HTTPS for administration or the console on port 8161
 
-Anders als der externe Broker ist er nicht fuer die netzweite Kommunikation gedacht, sondern fuer interne Verarbeitung und Auditierbarkeit.
+Unlike the external Broker, it is intended for internal processing and auditability rather than network-wide communication.
 
-### Voraussetzungen
+### Prerequisites
 
-- Linux-VM mit Java-Laufzeit entsprechend dem offiziellen Softwarepaket
-- Vorbereiteter Keystore fuer TLS auf der AMQPS-Schnittstelle
-- Definierte Benutzer und Rollen fuer Endpoint- oder Toolbox-Zugriffe
-- Ausreichender lokaler Speicher fuer Journal, Bindings, Paging und Logs
-- Geklaerte Queue-Prefixe, falls mehrere Endpoints dieselbe Instanz nutzen
+- Linux VM with a Java runtime matching the official software package
+- Prepared keystore for TLS on the AMQPS interface
+- Defined users and roles for Endpoint or Toolbox access
+- Sufficient local storage for the journal, bindings, paging and logs
+- Agreed queue prefixes if multiple Endpoints use the same instance
 
-### Wichtige Verzeichnisse und Dateien
+### Important Directories and Files
 
-Die Repo-Konfiguration legt fuer eine VM-Sicht vor allem diese Struktur nahe:
+From a VM perspective, the repository configuration primarily suggests the following structure:
 
-- Installationsbasis unter `/usr/share/eccosp-artemis`
-- Instanzdaten unter `/opt/eccosp-artemis`
-- Konfiguration unter `/opt/eccosp-artemis/etc`
-- Laufzeitdaten unter `/opt/eccosp-artemis/data`
-- `broker.xml` fuer Artemis- und TLS-Konfiguration
-- `artemis.profile` fuer Start- und JVM-Parameter
-- `keystore.jks` fuer den TLS-Endpunkt
+- Installation base under `/usr/share/eccosp-artemis`
+- Instance data under `/opt/eccosp-artemis`
+- Configuration under `/opt/eccosp-artemis/etc`
+- Runtime data under `/opt/eccosp-artemis/data`
+- `broker.xml` for Artemis and TLS configuration
+- `artemis.profile` for startup and JVM parameters
+- `keystore.jks` for the TLS endpoint
 
-### Installationsablauf
+### Installation Procedure
 
-1. Die VM mit Betriebssystem, Java und Systembenutzer vorbereiten.
-2. Das offizielle Internal-Broker- bzw. ECCoSP-Artemis-Paket installieren oder entpacken.
-3. Instanz-, Daten-, Log- und Konfigurationsverzeichnisse anlegen.
-4. `broker.xml` fuer den AMQPS-Acceptor, TLS, Journal und Speichergrenzen anpassen.
-5. `artemis.profile` fuer JVM-Groessen und Startoptionen anpassen.
-6. Den Keystore an der konfigurierten Stelle ablegen und Benutzerdateien pflegen.
-7. Den Broker als Dienst registrieren und starten.
-8. Erst danach die verbundenen Endpoints auf diese Instanz ausrichten.
+1. Prepare the VM with an operating system, Java and a system user.
+2. Install or extract the official Internal Broker or ECCoSP Artemis package.
+3. Create the instance, data, log and configuration directories.
+4. Adjust `broker.xml` for the AMQPS acceptor, TLS, the journal and memory limits.
+5. Adjust `artemis.profile` for JVM sizing and startup options.
+6. Place the keystore at the configured location and maintain the user files.
+7. Register the Broker as a service and start it.
+8. Only then configure the connected Endpoints to use this instance.
 
-### Inhaltlich wichtige Parameter
+### Key Configuration Parameters
 
-Bei einer VM-Installation sind insbesondere diese Punkte relevant:
+The following settings are particularly relevant for a VM installation:
 
-- Acceptor-Port und TLS-Parameter in `broker.xml`
-- Keystore-Pfad und Passwort
-- Journal-, Bindings-, Paging- und Large-Message-Verzeichnisse
-- JVM-Werte in `artemis.profile`
-- Benutzer und Rollen fuer die zugreifenden Clients
-- optional Queue-spezifische Address-Settings
+- Acceptor port and TLS parameters in `broker.xml`
+- Keystore path and password
+- Journal, bindings, paging and large-message directories
+- JVM values in `artemis.profile`
+- Users and roles for connecting clients
+- Optional queue-specific address settings
 
-### Validierung nach der Installation
+### Post-Installation Validation
 
-- HTTPS-Konsole auf Port 8161 pruefen
-- AMQPS-Schnittstelle auf Port 5672 pruefen
-- Benutzeranmeldung und TLS-Handshake testen
-- Queue-Erzeugung und Queue-Prefixe mit einem Test-Endpoint pruefen
-- Audit-Logging und Journal-Verhalten kontrollieren
+- Check the HTTPS console on port 8161
+- Check the AMQPS interface on port 5672
+- Test user login and the TLS handshake
+- Check queue creation and queue prefixes with a test Endpoint
+- Check audit logging and journal behavior
 
-### Hinweis fuer die Installationsreihenfolge
+### Installation Order Note
 
-Der interne Broker muss auf VMs vor den abhaengigen Endpoints bereitstehen. Wenn mehrere Endpoints dieselbe Instanz nutzen, muessen Queue-Prefixe und Benutzerrechte sauber getrennt werden.
+On VMs, the Internal Broker must be available before the Endpoints that depend on it. If multiple Endpoints use the same instance, queue prefixes and user permissions must be clearly separated.
 
-## Kurzfazit
+## Conclusion
 
-Der interne Broker ist die technische Basis fuer die interne Endpoint-Verarbeitung. In Kubernetes ist er vor allem fuer stabile interne Messaging-Pfade, Auditierbarkeit und eine saubere Trennung mehrerer Endpoint-Instanzen relevant.
+The Internal Broker is the technical foundation for internal Endpoint processing. In Kubernetes, it is particularly relevant to stable internal messaging paths, auditability and clear separation of multiple Endpoint instances.

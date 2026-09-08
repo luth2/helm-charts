@@ -1,102 +1,102 @@
 # Component Directory
 
-Offizielle Quelle:
+Official source:
 
 - [Component Directory Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/component-directory-manual)
 - [ECCo SP Documents](https://eccosp-docs.entsoe.eu/k)
 
-## Zweck
+## Purpose
 
-Das Component Directory ist die zentrale Verzeichnis- und Registrierungsinstanz im ECP-Netz. Es haelt die oeffentlich relevanten Informationen ueber Komponenten vor und stellt Schnittstellen fuer Registrierung, Konfigurationsaenderungen und Synchronisation bereit.
+The Component Directory is the central directory and registration authority in the ECP network. It maintains the relevant public information about components and provides interfaces for registration, configuration changes and synchronization.
 
-## Rolle im Gesamtsystem
+## Role in the Overall System
 
-Jede Komponente muss sich zunaechst bei einem Home Component Directory registrieren, um am Netz teilzunehmen.
+Each component must first register with a Home Component Directory to participate in the network.
 
-- Registrierung neuer Komponenten
-- Aktualisierung bestehender Konfigurationen
-- Synchronisation lokaler Verzeichnisse mit einem Component Directory
+- Registration of new components
+- Updates to existing configurations
+- Synchronization of local directories with a Component Directory
 
-Darueber hinaus behandelt die offizielle Doku Themen wie Zertifizierungsstellen-Updates, zentrale Verwaltung von Message Paths und Gruppen von ECP-Netzen.
+The official documentation also covers topics such as certification authority updates, centralized management of Message Paths and groups of ECP networks.
 
-## Technischer Aufbau laut Doku
+## Technical Architecture According to the Documentation
 
-Das Component Directory besteht laut Manual aus zwei Teilen:
+According to the manual, the Component Directory consists of two parts:
 
-- einer Directory-Anwendung mit REST-Schnittstelle
-- einem zugehoerigen Directory Store
+- A directory application with a REST interface
+- An associated Directory Store
 
-## Betriebsrelevante Punkte
+## Operational Considerations
 
-- Das Component Directory ist der Vertrauensanker fuer Stammdaten und Sicherheitsbezug im Netz.
-- Andere Komponenten greifen auf diese Daten fuer Registrierung, Zertifikate und Partnerinformationen zu.
-- Eine stabile Synchronisation und konsistente Pflege der Eintraege sind fuer einen stoerungsfreien Betrieb zentral.
+- The Component Directory is the trust anchor for master data and security-related information in the network.
+- Other components access these data for registration, certificates and partner information.
+- Stable synchronization and consistent maintenance of entries are essential for uninterrupted operation.
 
-## Bezug zum Helm-Repository
+## Relationship to the Helm Repository
 
 - Chart: `charts/ecp-directory`
-- Beispiel-Values: `ecco-sp/values-ecp-directory-cd.yaml`
+- Example values: `ecco-sp/values-ecp-directory-cd.yaml`
 
-## Installationsanleitung auf VM
+## VM Installation Guide
 
-### Zielbild
+### Target Setup
 
-Das Component Directory wird als zentrale Vertrauens- und Registrierungsinstanz auf einer VM betrieben. Es stellt typischerweise eine HTTPS-Oberflaeche bzw. REST-Schnittstelle auf Port 8443 bereit und speichert Verzeichnis- und Zertifikatsinformationen lokal oder in einer externen Datenbank.
+The Component Directory runs on a VM as the central trust and registration authority. It typically provides an HTTPS user interface or REST interface on port 8443 and stores directory and certificate information locally or in an external database.
 
-### Voraussetzungen
+### Prerequisites
 
-- Linux-VM mit Java-Laufzeit entsprechend dem offiziellen Softwarepaket
-- Vorbereitete Keystores, CA-bezogene Passwoerter und Registrierungsdaten
-- Optional eine externe Datenbank fuer HA- oder zentrale Persistenz
-- Freigeschalteter HTTPS-Port 8443
-- Administrativer Zugriff fuer Erstkonfiguration und Nutzeranlage
+- Linux VM with a Java runtime matching the official software package
+- Prepared keystores, CA-related passwords and registration data
+- Optional external database for HA or centralized persistence
+- Open HTTPS port 8443
+- Administrative access for initial configuration and user creation
 
-### Wichtige Verzeichnisse und Dateien
+### Important Directories and Files
 
-Aus der Repo-Konfiguration ergeben sich fuer den klassischen VM-Betrieb vor allem diese Artefakte:
+The repository configuration identifies the following key artifacts for traditional VM operation:
 
-- Laufzeitdaten unter `/var/lib/ecp-directory`
-- Logs unter `/var/log/ecp-directory`
-- Hauptkonfiguration `ecp-directory.properties`
-- Logging-Konfiguration `ecp-logback.xml`
+- Runtime data under `/var/lib/ecp-directory`
+- Logs under `/var/log/ecp-directory`
+- Main configuration `ecp-directory.properties`
+- Logging configuration `ecp-logback.xml`
 - Keystore `keystore.jks`
-- Authentifizierungs-Keystore `authKeystore.jks`
-- Benutzerdatei fuer Directory-Accounts
+- Authentication keystore `authKeystore.jks`
+- User file for Directory accounts
 
-### Installationsablauf
+### Installation Procedure
 
-1. Die VM mit Betriebssystem, Java und Systembenutzer vorbereiten.
-2. Das offizielle Component-Directory-Paket installieren oder entpacken.
-3. Daten-, Log- und Konfigurationsverzeichnisse anlegen.
-4. `ecp-directory.properties` fuer Datenpfad, HTTPS, Zertifikate, Synchronisation und gegebenenfalls externe Datenbank anpassen.
-5. Keystores und CA-bezogene Passwoerter sauber hinterlegen.
-6. Administrative Benutzer einrichten.
-7. Das Directory als Dienst registrieren und starten.
-8. Nach erfolgreicher Initialisierung nachgelagerte Komponenten gegen dieses Directory registrieren.
+1. Prepare the VM with an operating system, Java and a system user.
+2. Install or extract the official Component Directory package.
+3. Create the data, log and configuration directories.
+4. Adjust `ecp-directory.properties` for the data path, HTTPS, certificates, synchronization and, if applicable, an external database.
+5. Store keystores and CA-related passwords appropriately.
+6. Set up administrative users.
+7. Register the Directory as a service and start it.
+8. After successful initialization, register downstream components with this Directory.
 
-### Inhaltlich wichtige Parameter
+### Key Configuration Parameters
 
-Bei einer VM-Installation sind insbesondere diese Werte kritisch:
+The following values are particularly critical for a VM installation:
 
-- `spring.profiles.active` fuer non-HA oder HA-Betrieb
+- `spring.profiles.active` for non-HA or HA operation
 - `ecp.keystore.location`, `ecp.authKeystore.location`
 - `ecp.directory.regKeystore.password`, `ecp.directory.caKeystore.password`
-- `ecp.automaticUpdate.*` fuer Zertifikatserneuerung
+- `ecp.automaticUpdate.*` for certificate renewal
 - `ecp.directory.client.synchronization.directorySynchronizationInterval`
-- gegebenenfalls `ecp.db.*` fuer externe Datenbank
+- If applicable, `ecp.db.*` for an external database
 
-### Validierung nach der Installation
+### Post-Installation Validation
 
-- HTTPS-Zugriff auf Port 8443 pruefen
-- Admin-Login pruefen
-- Zertifikatsfunktionen und automatische Updates pruefen
-- Synchronisation mit weiteren Directories pruefen, falls genutzt
-- Registrierung einer Testkomponente erfolgreich durchspielen
+- Check HTTPS access on port 8443
+- Check administrator login
+- Check certificate functions and automatic updates
+- Check synchronization with other Directories, if used
+- Successfully complete registration of a test component
 
-### Hinweis fuer die Installationsreihenfolge
+### Installation Order Note
 
-Das Component Directory ist auf VMs in der Regel die erste produktive Komponente. Broker und Endpoints sollten erst danach installiert und registriert werden.
+On VMs, the Component Directory is usually the first component brought into production. Brokers and Endpoints should only be installed and registered afterward.
 
-## Kurzfazit
+## Conclusion
 
-Das Component Directory ist die Verwaltungs- und Vertrauensinstanz des ECP-Netzes. Wenn Komponenten onboardingfaehig, auffindbar und sicher konfigurierbar bleiben sollen, ist diese Komponente betriebsentscheidend.
+The Component Directory is the administration and trust authority of the ECP network. It is operationally critical to keeping components available for onboarding, discoverable and securely configurable.

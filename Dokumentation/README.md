@@ -1,47 +1,50 @@
-# ECCo SP Komponenten-Dokumentation
+# ECCo SP Component Documentation
 
-Diese Ablage fasst die offizielle ECCo SP Dokumentation für die im Repository verwalteten Helm-Charts kompakt zusammen.
+This directory provides a concise summary of the official ECCo SP documentation for the Helm charts maintained in this repository.
 
-Offizielle Doku-Startseite:
+Official documentation home page:
 
 - [ECCo SP Documents](https://eccosp-docs.entsoe.eu/k)
 
-Komponenten in diesem Repository:
+Components in this repository:
 
-| Komponente | Repo-Chart | Zusammenfassung | Offizielle Quelle |
+| Component | Repository chart | Summary | Official source |
 | --- | --- | --- | --- |
 | Endpoint | `charts/ecp-endpoint` | [Endpoint](./Endpoint.md) | [Endpoint Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/endpoint-manual) |
-| Interner Broker | `charts/eccosp-artemis` | [Interner Broker](./Interner_Broker.md) | [Internal Broker Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/internal-broker-manual) |
+| Internal Broker | `charts/eccosp-artemis` | [Internal Broker](./Interner_Broker.md) | [Internal Broker Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/internal-broker-manual) |
 | Broker | `charts/ecp-broker` | [Broker](./Broker.md) | [Broker Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/broker-manual) |
 | Component Directory | `charts/ecp-directory` | [Component Directory](./Component_Directory.md) | [Component Directory Manual](https://eccosp-docs.entsoe.eu/s/ecco-sp/m/component-directory-manual) |
 
-Stand der Zusammenfassung: 31.03.2026.
+Summary as of: March 31, 2026.
 
-Weitere technische Notizen:
+## Kubernetes and Helm
 
-- [Artifact Registry Empfehlung](./Artifact_Registry_Empfehlung.md)
+- [Helm repository, quickstart and GitOps](./Helm_Repository.md)
+- [Configuration, external Secrets, HA and migration](./Helm_Charts.md)
+- [Gateway API and TLS](./Gateway_API.md)
+- [GitHub Pages and publishing](./GitHub_Pages.md)
 
-## Empfohlene Reihenfolge auf VMs
+## Recommended Order on VMs
 
-Wenn die Komponenten klassisch auf VMs installiert werden, ist diese Reihenfolge fachlich und betrieblich sinnvoll:
+For traditional component installations on VMs, the following order makes sense from both a functional and an operational perspective:
 
 1. Component Directory
 2. Broker
-3. Interner Broker
+3. Internal Broker
 4. Endpoint
 
-Begründung:
+Rationale:
 
-- Das Component Directory ist die Vertrauens- und Registrierungsinstanz.
-- Der Broker benötigt das Component Directory für Registrierung und Synchronisation.
-- Der interne Broker muss stehen, bevor ein Endpoint intern Nachrichten verarbeiten kann.
-- Der Endpoint sollte erst zuletzt installiert und registriert werden, wenn die abhängigen Dienste bereits erreichbar sind.
+- The Component Directory is the trust and registration authority.
+- The Broker requires the Component Directory for registration and synchronization.
+- The Internal Broker must be available before an Endpoint can process messages internally.
+- The Endpoint should be installed and registered last, once the services it depends on are reachable.
 
-## Ableitung für eigene Container-Builds
+## Implications for Custom Container Builds
 
-Wenn du die Container später selbst bauen willst, ist die VM-Sicht hilfreich, weil sie die eigentliche Laufzeitstruktur zeigt:
+If you plan to build the containers yourself later, the VM perspective is helpful because it shows the actual runtime structure:
 
-- Binärartefakte und Startskripte liegen in den Installationsverzeichnissen der Komponente.
-- Konfiguration, Keystores und Benutzerdateien müssen sauber vom Image entkoppelt werden.
-- Persistente Daten, Journale und Logs sollten als getrennte Verzeichnisse oder Volumes geplant werden.
-- Zertifikate und registrierungsbezogene Keystores sollten nie fest ins Image gebaut werden.
+- Binary artifacts and startup scripts reside in the component's installation directories.
+- Configuration, keystores and user files must be clearly separated from the image.
+- Persistent data, journals and logs should be planned as separate directories or volumes.
+- Certificates and registration-related keystores should never be baked into the image.

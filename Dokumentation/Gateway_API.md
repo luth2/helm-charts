@@ -1,44 +1,44 @@
-# Gateway API neben Ingress
+# Gateway API Alongside Ingress
 
-Alle vier Einzelcharts bieten optional `instance[].gateway.enabled`. Standard ist
-`false`; bestehende Ingress-Installationen bleiben unveraendert. Es handelt sich
-um **Web-Routing mit HTTPRoute**, nicht um einen Ersatz fuer AMQP(S)-Zugaenge.
+All four standalone charts optionally support `instance[].gateway.enabled`. The default is
+`false`; existing Ingress installations remain unchanged. This provides
+**web routing with HTTPRoute**, not a replacement for AMQP(S) access.
 
-Die Einstellung zum Community-Projekt **ingress-nginx** betrifft nicht die
-Kubernetes-Ingress-API selbst und nicht pauschal alle NGINX-Produkte. Ein anderer
-Controller wird durch diese Charts weder ausgewaehlt noch installiert.
+The discontinuation of the **ingress-nginx** community project does not affect the
+Kubernetes Ingress API itself or all NGINX products in general. These charts
+neither select nor install a replacement controller.
 
-## Verantwortung und Voraussetzungen
+## Responsibilities and Prerequisites
 
-| Plattform/Betrieb | Diese Charts |
+| Platform/operations | These charts |
 | --- | --- |
-| Gateway-API-CRDs, Gateway-Controller und GatewayClass | Eine `HTTPRoute` pro aktivierter Instanz |
-| Bestehendes Gateway und HTTP-/HTTPS-Listener | Referenz auf genau ein Gateway, optional einen Listener |
-| Oeffentliche TLS-Zertifikate am HTTPS-Listener | Hostnamen und ein `PathPrefix` auf den normalen Instanz-Service |
-| CA-ConfigMap und Backend-Zertifikate | Bei HTTPS eine `BackendTLSPolicy` fuer den HTTPS-Service-Port |
-| DNS, Firewall, allowedRoutes und Controller-Betrieb | Keine CRDs, Gateways, Zertifikate oder ReferenceGrants |
+| Gateway API CRDs, Gateway controller and GatewayClass | One `HTTPRoute` per enabled instance |
+| Existing Gateway and HTTP/HTTPS listeners | Reference to exactly one Gateway, optionally a listener |
+| Public TLS certificates on the HTTPS listener | Hostnames and a `PathPrefix` targeting the regular instance Service |
+| CA ConfigMap and backend certificates | For HTTPS, a `BackendTLSPolicy` for the HTTPS Service port |
+| DNS, firewall, allowedRoutes and controller operation | No CRDs, Gateways, certificates or ReferenceGrants |
 
-`HTTPRoute` und `BackendTLSPolicy` werden als `gateway.networking.k8s.io/v1`
-gerendert. Fuer HTTPS ist Gateway API **>= 1.4.0 Standard Channel** erforderlich;
-die CI prueft gegen **v1.4.1**. Der gewaehlte Controller muss HTTPRoute und die
-verwendeten BackendTLSPolicy-Funktionen unterstuetzen. CRD-Installation allein
-garantiert keine Unterstuetzung. Kubernetes-/Controller-Kompatibilitaet der
-konkret installierten Gateway-API-Version separat pruefen.
+`HTTPRoute` and `BackendTLSPolicy` are rendered as `gateway.networking.k8s.io/v1`.
+HTTPS requires Gateway API **>= 1.4.0 Standard Channel**;
+CI checks against **v1.4.1**. The selected controller must support HTTPRoute and the
+BackendTLSPolicy features used. Installing CRDs alone
+does not guarantee support. Check Kubernetes/controller compatibility for the
+specific installed Gateway API version separately.
 
-Die Charts fragen beim Rendern keinen Cluster ab. Ohne installierte CRDs scheitert
-das Deployment aktivierter Gateway-Ressourcen; bei deaktiviertem Gateway sind
-keine Gateway-API-CRDs notwendig.
+The charts do not query a cluster during rendering. Without installed CRDs,
+deployment of enabled Gateway resources fails; when Gateway is disabled,
+no Gateway API CRDs are required.
 
-## HTTPS-Beispiel pro Instanz
+## HTTPS Example per Instance
 
-Die **vollstaendige Instanzliste** aus den jeweiligen Chart-Values uebernehmen und
-im gewuenschten Eintrag den folgenden Ausschnitt einsetzen. Nicht als isolierte
-`instance`-Liste uebergeben: Helm ersetzt Listen, statt deren Elemente zu mergen.
-Image, vorhandenes Konfigurations-Secret, Storage und alle weiteren benoetigten
-Instanzwerte bleiben erforderlich.
+Copy the **complete instance list** from the relevant chart values and
+insert the following snippet into the desired entry. Do not pass it as an isolated
+`instance` list: Helm replaces lists rather than merging their elements.
+The image, existing configuration Secret, storage and all other required
+instance values are still necessary.
 
 ```yaml
-# Ausschnitt innerhalb einer vollstaendigen instance[]-Konfiguration
+# Snippet within a complete instance[] configuration
 ingress:
   enabled: false
 gateway:
@@ -59,93 +59,93 @@ gateway:
         name: backend-ca
 ```
 
-Das Gateway `shared-web` muss existieren. Sein HTTPS-Listener `https` terminiert
-Client-TLS und referenziert das oeffentliche Zertifikat fuer `broker.example.org`.
-Der Gateway-Namespace ist optional; ohne ihn wird der Release-Namespace verwendet.
-Ohne `sectionName` erfolgt die Anbindung an passende Listener des Gateways.
-Fuer ein Gateway in einem anderen Namespace muss dessen `allowedRoutes` den
-Namespace der HTTPRoute zulassen. **Dafuer ist kein ReferenceGrant erforderlich**;
-es wird kein namespace-uebergreifender Service-Backend-Verweis erzeugt.
+The Gateway `shared-web` must exist. Its HTTPS listener `https` terminates
+client TLS and references the public certificate for `broker.example.org`.
+The Gateway namespace is optional; if omitted, the release namespace is used.
+Without `sectionName`, the route attaches to matching listeners on the Gateway.
+For a Gateway in another namespace, its `allowedRoutes` must permit the
+HTTPRoute's namespace. **No ReferenceGrant is required for this**;
+no cross-namespace Service backend reference is created.
 
-Der zweite TLS-Abschnitt ist unabhaengig davon: Gateway -> Anwendung.
-`backendTLS.hostname` ist der SNI-/Zertifikatsname des Backends, ohne Wildcard.
-Die vorhandene ConfigMap `backend-ca` liegt im **Release-Namespace** und enthaelt
-die PEM-CA unter `ca.crt`. Hier keine privaten Schluessel ablegen. Zertifikatskette
-und SAN muessen stimmen; eine unsichere Abschaltung der Pruefung wird nicht angeboten.
+The second TLS segment is independent: Gateway -> application.
+`backendTLS.hostname` is the backend's SNI/certificate name, without a wildcard.
+The existing ConfigMap `backend-ca` resides in the **release namespace** and contains
+the PEM CA certificate under `ca.crt`. Do not store private keys here. The certificate chain
+and SAN must be correct; insecure disabling of verification is not offered.
 
-Alternativ zu `caCertificateRefs` kann `wellKnownCACertificates: System` gesetzt
-werden. Genau eine Vertrauensquelle ist erlaubt. Welche System-CAs verwendet
-werden und ob dieser Modus unterstuetzt wird, haengt vom Controller ab.
+As an alternative to `caCertificateRefs`, you can set `wellKnownCACertificates: System`.
+Exactly one trust source is allowed. Which system CAs are used
+and whether this mode is supported depend on the controller.
 
-Standard fuer `backendProtocol` ist `https`, fuer `path` `/`. Das Chart liest
-die Portnummer aus `service.https.port` und erzeugt:
+The default for `backendProtocol` is `https`, and for `path` it is `/`. The chart reads
+the port number from `service.https.port` and creates:
 
-- HTTPRoute `<instanzname>-route` -> Service `<instanzname>-svc`.
-- BackendTLSPolicy `<instanzname>-backend-tls` -> denselben Service, `sectionName: https`.
+- HTTPRoute `<instance-name>-route` -> Service `<instance-name>-svc`.
+- BackendTLSPolicy `<instance-name>-backend-tls` -> the same Service, `sectionName: https`.
 
-Die Policy erfasst nur den benannten HTTPS-Port, nicht AMQPS oder den Headless-Service.
-Es wird kein HTTP aufgrund einer Portnummer automatisch angenommen und kein
-TLS-Modus in der externen Anwendungs-Konfiguration geaendert.
+The policy covers only the named HTTPS port, not AMQPS or the headless Service.
+HTTP is not automatically assumed based on a port number, and no
+TLS mode in the external application configuration is changed.
 
-## HTTP-Backend nach TLS-Terminierung
+## HTTP Backend After TLS Termination
 
-Mit `backendProtocol: http` wird keine BackendTLSPolicy erzeugt. Dann muss
-`service.http.port` konfiguriert sein und die Anwendung dort tatsaechlich HTTP
-anbieten. `backendTLS` muss vollstaendig entfernt werden. Der Abschnitt zwischen
-Gateway und Pod ist in diesem Modus **unverschluesselt**, auch wenn der Client
-das Gateway per HTTPS erreicht. Nur nach bewusster Netzwerk-/Sicherheitsfreigabe nutzen.
+With `backendProtocol: http`, no BackendTLSPolicy is created. In this case,
+`service.http.port` must be configured and the application must actually serve HTTP
+there. `backendTLS` must be removed entirely. The segment between
+the Gateway and the Pod is **unencrypted** in this mode, even if the client
+accesses the Gateway over HTTPS. Use only after explicit network/security approval.
 
-Ein HTTP-Service-Value erzeugt lediglich Kubernetes-Portkonfiguration: Den Listener
-in den externen Server-/Bootstrap-Dateien ebenfalls abstimmen. Ein vorhandener
-HTTPS-Port bleibt unveraendert; es gibt keinen automatischen Fallback.
+An HTTP Service value only creates Kubernetes port configuration: also align the listener
+in the external server/bootstrap files. An existing
+HTTPS port remains unchanged; there is no automatic fallback.
 
-## Umfang und Grenzen
+## Scope and Limitations
 
-- Ein Gateway-Parent, bis zu 16 Hostnamen, ein `PathPrefix`, genau der lokale
-  Instanz-Service als Backend. Optional String-Annotations fuer die HTTPRoute.
-- Kein automatisches Umschreiben des Pfads, kein Redirect, keine Authentifizierung
-  und keine Uebernahme controllerspezifischer Ingress-Annotations. Solche Funktionen
-  separat am Gateway/Controller planen. `path` ist nur ein Match, kein Rewrite.
-- Kein TCPRoute/TLSRoute, kein AMQP-Passthrough und keine automatische mTLS-Konfiguration.
-  Benoetigt ECP die urspruengliche Client-Zertifikatsidentitaet am Backend, ist die
-  TLS-Terminierung kein transparenter Ersatz. mTLS-/PKI-Konzept separat abstimmen.
-- Application-URLs, Proxy-Vertrauen, Cookies/Redirects und Jolokia-Origin-Policy
-  bleiben in der jeweiligen Anwendungs-/Betriebskonfiguration zu pruefen.
-- Bei HA-Brokern bleiben passive Pods gegebenenfalls NotReady. Die HTTPRoute nutzt
-  den normalen Service und aendert diese bestehende Readiness-/HA-Semantik nicht.
+- One Gateway parent, up to 16 hostnames, one `PathPrefix`, and exactly the local
+  instance Service as the backend. Optional string annotations for the HTTPRoute.
+- No automatic path rewriting, redirects, authentication
+  or adoption of controller-specific Ingress annotations. Plan such features
+  separately on the Gateway/controller. `path` is only a match, not a rewrite.
+- No TCPRoute/TLSRoute, AMQP passthrough or automatic mTLS configuration.
+  If ECP requires the original client certificate identity at the backend,
+  TLS termination is not a transparent replacement. Coordinate the mTLS/PKI design separately.
+- Application URLs, proxy trust, cookies/redirects and the Jolokia origin policy
+  must still be checked in the respective application/operational configuration.
+- For HA Brokers, passive Pods may remain NotReady. The HTTPRoute uses
+  the regular Service and does not change these existing readiness/HA semantics.
 
-## Gestufte Migration
+## Staged Migration
 
-1. Unterstuetzten Gateway-Controller, CRDs, Gateway und TLS bereitstellen.
-2. `gateway.enabled: true` zunaechst parallel zu `ingress.enabled: true` setzen.
-   Fuer Tests einen separaten Hostnamen oder kontrollierte DNS-Aufloesung nutzen;
-   bestehende Ingress-Annotations werden nicht automatisch konvertiert.
-3. `HTTPRoute.status.parents` auf `Accepted=True` und `ResolvedRefs=True` pruefen;
-   Gateway auf `Programmed=True` sowie BackendTLSPolicy-Status kontrollieren.
-   Conditions muessen zur aktuellen Generation gehoeren, nicht zu alten Aenderungen.
-4. Frontend-TLS, Backend-SNI/CA, Anmeldung, fachliche Requests und Failover testen.
-   Gueltige Manifeste beweisen weder Zertifikatsgueltigkeit noch Erreichbarkeit.
-5. DNS/Traffic kontrolliert umstellen, anschliessend `ingress.enabled: false` setzen.
-   Rueckweg vorhalten; alten Controller erst nach Migration aller Verbraucher entfernen.
+1. Provision a supported Gateway controller, CRDs, Gateway and TLS.
+2. Initially set `gateway.enabled: true` alongside `ingress.enabled: true`.
+   Use a separate hostname or controlled DNS resolution for testing;
+   existing Ingress annotations are not converted automatically.
+3. Check `HTTPRoute.status.parents` for `Accepted=True` and `ResolvedRefs=True`;
+   check the Gateway for `Programmed=True` and check the BackendTLSPolicy status.
+   Conditions must apply to the current generation, not to earlier changes.
+4. Test frontend TLS, backend SNI/CA, login, business requests and failover.
+   Valid manifests prove neither certificate validity nor reachability.
+5. Switch DNS/traffic in a controlled manner, then set `ingress.enabled: false`.
+   Maintain a rollback path; remove the old controller only after migrating all consumers.
 
-## CI und Release
+## CI and Release
 
-Alle vier Einzelcharts werden aus Quelle und entpacktem Paket mit Gateway- und
-Ingress-Szenarien geprueft: HTTP/HTTPS, CA-Modi, Namespace/Listener, eigene Pfade,
-lange Namen, mehrere/deaktivierte Instanzen und ungueltige Konfigurationen.
-Kubeconform erhaelt aus den offiziellen v1.4.1-CRDs abgeleitete Schemas; die
-Downloads werden per festem SHA256 geprueft und nicht als ausfuehrbarer Code geladen.
-Fehlende Schemas werden nicht ignoriert. Die Pruefung ist clusterfrei: Kubernetes-
-CEL-Regeln, Controller-Unterstuetzung, Zertifikate und Routing-Laufzeit sind damit
-nicht nachgewiesen und muessen im Zielcluster abgenommen werden.
+All four standalone charts are tested from source and from the extracted package with Gateway and
+Ingress scenarios: HTTP/HTTPS, CA modes, namespace/listener, custom paths,
+long names, multiple/disabled instances and invalid configurations.
+Kubeconform receives schemas derived from the official v1.4.1 CRDs;
+downloads are verified against fixed SHA256 checksums and are not loaded as executable code.
+Missing schemas are not ignored. Validation is cluster-free: Kubernetes
+CEL rules, controller support, certificates and runtime routing behavior are therefore
+not verified and must undergo acceptance testing in the target cluster.
 
-Bereits veroeffentlichte Chart-Versionen nicht ueberschreiben. Vor der
-Veroeffentlichung dieser neuen Funktion eine neue Chart-Version waehlen;
-`appVersion` und Container-Tags muessen sich dadurch nicht aendern.
+Do not overwrite previously published chart versions. Choose a new chart version
+before publishing this new feature;
+`appVersion` and container tags do not have to change as a result.
 
-## Weiterfuehrend
+## Further Reading
 
-- [Helm-Betriebsanleitung](Helm_Charts.md)
+- [Helm operations guide](Helm_Charts.md)
 - [Gateway API: HTTP Routing](https://gateway-api.sigs.k8s.io/guides/http-routing/)
-- [Gateway API: TLS-Konfiguration](https://gateway-api.sigs.k8s.io/guides/tls/)
-- [Migration von Ingress-NGINX](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress-nginx/)
+- [Gateway API: TLS Configuration](https://gateway-api.sigs.k8s.io/guides/tls/)
+- [Migrating from Ingress-NGINX](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress-nginx/)
