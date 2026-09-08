@@ -89,6 +89,7 @@ Vor dem Start muessen in diesen externen Dateien zusammenpassen:
 | EP/CD `loggingFileName`, `loggingConfig` | Expliziter Pfadabgleich; keine Aenderung der externen Properties |
 | EP `ecpProperties.internalBrokerAuthUser` | Benutzername im oeffentlichen Gruppenmapping, keine Kontoanlage |
 | EP optional `usersProperties.users[].login` | Weitere oeffentliche Gruppenmitglieder, Passwort nur extern |
+| EP/CD `instance[].jmxRemoteUsers` mit `login`/`access` | Oeffentliches JMX-Access-Mapping; passende Passwortdatei extern |
 | BR/AR `artemisUsers[].login` | Oeffentliches `amq`-Rollenmapping; Benutzer/Credentials extern |
 | EP/CD `sessionReplication` | Oeffentlicher Tomcat-Kontext und DNS-Umgebung; passendes externes Server-XML weiterhin erforderlich |
 | BR/AR `brokerXml.highAvailability.acceptor.port` | HA-Port von Pod und Headless-Service, nicht Inhalt externer XML-Dateien |
@@ -99,11 +100,13 @@ ebenfalls stehen. Private Benutzerlisten entfallen aus Values. Beim CD kann eine
 leere Rollenzuordnung nach offizieller Konfiguration extern erhalten bleiben;
 Helm setzt keine vermeintliche Standardrolle ein.
 
-Das benannte interne `configuration`-Template baut weiterhin auch private
-Zwischendokumente auf. `publicConfig` bzw. die ConfigMap-Ausgabe entfernen diese
-Keys vor der Ausgabe. Ihre alten Values und internen Defaults sind deshalb
-**keine Steuerung der eingebundenen externen Dateien**. Auch ein erfolgreicher
-Render beweist keine Uebereinstimmung zwischen Values und Secret.
+Das benannte interne `configuration`-Template rendert ausschliesslich
+oeffentliche Konfiguration. Private Vollfiles werden auch intern **gar nicht
+gerendert**; private Legacy-Datensektionen und Dummy-Werte sind entfernt.
+Die `omit`-Listen in `publicConfig` und der ConfigMap-Ausgabe bleiben als
+defensiver Schutz fuer reservierte private Datei-Keys erhalten. Alte private
+Values steuern keine extern eingebundene Datei. Weder diese Filter noch ein
+erfolgreicher Render validieren Secret-Inhalte oder deren Uebereinstimmung mit Values.
 `configMap`, Umgebungsvariablen und zusaetzliche Mounts nicht als Umgehung dieses
 Vertrags fuer private Inhalte benutzen.
 
@@ -365,8 +368,12 @@ Auch eine geaenderte Checksumme oder `secretRevision` hebt `OnDelete` nicht auf.
 JMX bleibt bei EP/CD standardmaessig unkonfiguriert. Bei nichtleerem
 `jmxRemoteProperties` sind **beide** zusaetzlichen privaten Keys erforderlich,
 auch wenn einzelne JMX-Schalter false sind. Nur oeffentliche JMX-Optionen und
-`jmxRemotePassword.jmxRemoteUsers` mit `login`/`access` fuer das Access-Mapping in
-Values pflegen; kein `password`. Passwort-/SSL-Inhalte vollstaendig extern halten.
+`instance[].jmxRemoteUsers: [{login: monitor, access: readonly}]` fuer das
+oeffentliche Access-Mapping in Values pflegen; kein `password`. Die Liste liegt
+direkt an der Instanz, nicht unter `jmxRemotePassword`. Alte verschachtelte
+Benutzerlisten werden nicht mehr ausgewertet. Die externe `jmxremote.password`
+muss zu den Logins dieser Access-Liste passen; Helm prueft diese Zuordnung nicht.
+Passwort-/SSL-Inhalte vollstaendig extern halten.
 Authentifizierung, SSL und Registry-SSL bewusst konfigurieren; separate
 JMX-Netzwerkfreigabe und die Java-Anforderungen an Dateirechte testen.
 
@@ -397,7 +404,7 @@ in die extern eingebundene Datei uebertragen.
 | `internalBrokerHost`, `internalBrokerUrls`, Ports, Authentifizierung, Keystore-, Queue- und Verbindungsparameter | EP-Vollkonfiguration extern; nur `internalBrokerAuthUser` fuer das oeffentliche Gruppenmapping bleibt |
 | `ecpCsrfSecret`, Jasypt-Algorithmus, `ecpPasswordProperties.encryptionPassword` | Extern generierte/verwaltete Werte; alten festen CSRF-Wert und bekannte Default-Passwoerter ersetzen |
 | `ecpUsersProperties.ecpEndpointUsers`, `ecpUsersProperties.ecpDirectoryUsers`, `usersProperties.users[].password` | Externe Benutzerdateien; EP-Gruppenmitglieder bei Bedarf nur mit Login oeffentlich; CD-Rolle darf gemaess offizieller Konfiguration leer bleiben |
-| `jmxRemotePassword.*.password`, `jmxRemoteSsl` inklusive Keystore-/Truststore-Passwoertern | Externe JMX-Vollfiles; oeffentliche Login-/Access-Zuordnung getrennt |
+| `jmxRemotePassword`, `jmxRemoteSsl` inklusive Benutzerpasswoertern und Keystore-/Truststore-Passwoertern | Externe JMX-Vollfiles; nur Login-/Access-Zuordnung nach `instance[].jmxRemoteUsers` migrieren, passende externe Passwortdatei bereitstellen |
 | LDAP, SOCKS-Proxy, NAT, AMQP-API/SendHandler, FSSF, Prioritaeten, Brokerparameter, Parallelitaet, Content-Storage, Synchronisations-/Registrierungs-/Cleaning-Jobs, Directory-Zugriff/TTL, UI-Theme | Externe EP-/CD-Properties; keine Wirkung alter Values auf die gemounteten Vollfiles |
 | Actuator-/Prometheus-/Health-Threshold-Properties, `springJmxEnabled`, Automatic-Update-Optionen | Externe Laufzeitkonfiguration; nicht mit Kubernetes-Probes verwechseln |
 | BR `brokerProperties` einschliesslich Kontaktdaten, Netzwerken, Filtern, ECP-Code, Directory-URL/-Code und Registrierungs-ID | Vollstaendige externe Broker-Properties; Registrierung und Aktualisierung der Ergebnisse ausserhalb von Helm |

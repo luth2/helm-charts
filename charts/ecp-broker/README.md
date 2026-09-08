@@ -27,8 +27,11 @@ keine Passwoerter und keine automatische Kontoanlage.
 Alte `brokerProperties`, private `brokerXml`-Felder, Passwort- und
 `prometheusEnabled`-Values aendern die externen Vollfiles nicht. Insbesondere
 aktiviert ein Value keine TLS- oder Metrik-Konfiguration im externen XML.
-Das benannte `configuration`-Template erzeugt intern noch private Dokumente,
-die vor der ConfigMap-Ausgabe entfernt werden. Das ist kein Secret-Generator.
+Das benannte `configuration`-Template rendert nur oeffentliche Konfiguration.
+Private Vollfiles werden auch intern gar nicht gerendert; private Legacy-
+Datensektionen und Dummy-Werte sind entfernt. Die `omit`-Listen in `publicConfig`
+und der ConfigMap-Ausgabe bleiben defensiver Schutz fuer reservierte private
+Datei-Keys, keine Validierung externer Secret-Inhalte.
 
 ## Oeffentliche Defaults
 

@@ -26,8 +26,11 @@ die Konten `endpoint` und `toolbox` werden dadurch nicht angelegt. Die externen
 Benutzerdateien und die Client-Konfigurationen muessen dazu passen.
 Private `brokerXml`-Values, `artemisKeystoreLocation`, `artemisKeystorePassword`
 oder `prometheusEnabled` aendern keine externen Dateien. Das benannte
-`configuration`-Template baut solche privaten Dokumente noch intern auf,
-entfernt sie aber vor der ConfigMap-Ausgabe. Es liefert keine Betriebs-Secrets.
+`configuration`-Template rendert nur oeffentliche Konfiguration. Private Vollfiles
+werden auch intern gar nicht gerendert; private Legacy-Datensektionen und
+Dummy-Werte sind entfernt. Die `omit`-Listen in `publicConfig` und der
+ConfigMap-Ausgabe bleiben defensiver Schutz fuer reservierte private Datei-Keys,
+keine Validierung externer Secret-Inhalte.
 
 ## Oeffentliche Defaults
 

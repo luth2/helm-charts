@@ -28,7 +28,7 @@ Keine Secret-Dateien oder privaten Konfigurationsbeispiele in diesem Repository 
 ## Was Values tatsaechlich steuern
 
 - Kubernetes: Image, Replikate, Ressourcen, Storage, Services, Ingress und Probes.
-- `envConf.resourcesJvm` und `ecpLogFullStackTrace`: oeffentliche JVM-Startkonfiguration.
+- `envConf.resourcesJvm` und `envConf.ecpLogFullStackTrace`: oeffentliche JVM-Startkonfiguration.
 - `ecpProperties.dataDirectory` und `loggingFilePath`: PVC-Mountpfade.
 - `springProfilesActive`: HA-Validierung; das tatsaechliche Laufzeitprofil kommt
   aus dem Secret. `console-logging` dort ebenfalls setzen.
@@ -41,11 +41,20 @@ Keine Secret-Dateien oder privaten Konfigurationsbeispiele in diesem Repository 
   oeffentliche Gruppenmitglieder benoetigt werden; niemals mit Passwort.
 - `sessionReplication`: oeffentlicher Tomcat-Kontext und Discovery-Umgebung;
   die passende Cluster-Konfiguration im externen `server.xml` bleibt Betreiberaufgabe.
+- `instance[].jmxRemoteUsers: [{login: monitor, access: readonly}]`: oeffentliches
+  JMX-Access-Mapping direkt an der Instanz, nicht unter `jmxRemotePassword`.
+  Alte verschachtelte Benutzerlisten werden nicht ausgewertet. Die externe
+  `jmxremote.password` muss zu diesen Logins passen; kein Passwort in Values.
+  Bei nichtleerem `jmxRemoteProperties` sind Passwort- und SSL-Datei erforderlich,
+  auch bei einzelnen Schaltern auf false. Helm validiert keine Secret-Inhalte.
 
 Andere alte `ecpProperties`, `ecpUsersProperties` und `ecpPasswordProperties`
 aendern die eingebundenen privaten Dateien nicht. Das benannte interne
-`configuration`-Template baut weiterhin private Zwischendokumente auf; diese
-werden vor der ConfigMap-Ausgabe entfernt. Das ist kein Exportweg fuer Secrets.
+`configuration`-Template rendert nur oeffentliche Konfiguration; private Vollfiles
+werden auch intern gar nicht gerendert. Private Legacy-Datensektionen und
+Dummy-Werte sind entfernt. Die `omit`-Listen in `publicConfig` und der
+ConfigMap-Ausgabe bleiben defensiver Schutz fuer reservierte private Datei-Keys,
+keine Validierung externer Secret-Inhalte.
 Ein zusaetzlicher Artemis-Bootstrap-Mount gehoert nicht zur Endpoint-Grundkonfiguration.
 
 ## Defaults und Pruefung

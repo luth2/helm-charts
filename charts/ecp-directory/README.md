@@ -39,10 +39,21 @@ Benutzer inklusive Rollen werden ausschliesslich extern verwaltet; eine leere
 Directory-Rollenzuordnung kann entsprechend der offiziellen Konfiguration
 beibehalten werden, Helm ergaenzt keine Rolle.
 
+`instance[].jmxRemoteUsers: [{login: monitor, access: readonly}]` steuert nur das
+oeffentliche JMX-Access-Mapping. Die Liste steht direkt an der Instanz, nicht
+unter `jmxRemotePassword`; alte verschachtelte Benutzerlisten entfallen.
+Die externe `jmxremote.password` muss zu diesen Logins passen; kein Passwort in
+Values. Bei nichtleerem `jmxRemoteProperties` sind Passwort- und SSL-Datei
+erforderlich, auch bei einzelnen Schaltern auf false. Helm prueft deren Inhalt
+und die Uebereinstimmung mit der Access-Liste nicht.
+
 Alte private `ecpDirectoryProperties`, `ecpUsersProperties` und
 `ecpPasswordProperties` aendern keine externe Datei. Das interne benannte
-`configuration`-Template erzeugt noch private Zwischendokumente, entfernt sie
-aber vor der ConfigMap-Ausgabe. Daraus keine privaten Betriebsdateien ableiten.
+`configuration`-Template rendert ausschliesslich oeffentliche Konfiguration.
+Private Vollfiles werden auch intern gar nicht gerendert; private Legacy-
+Datensektionen und Dummy-Werte sind entfernt. Die `omit`-Listen in `publicConfig`
+und der ConfigMap-Ausgabe bleiben defensiver Schutz fuer reservierte private
+Datei-Keys, keine Validierung externer Secret-Inhalte.
 
 ## Defaults und Pruefung
 

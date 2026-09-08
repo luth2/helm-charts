@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -9,7 +10,7 @@ from unittest.mock import patch
 
 import yaml
 
-from chart_fixtures import BROKERS, CHARTS, PROBES, Case, SECRET, components, fixtures, merge, read_yaml, secret_keys
+from chart_fixtures import BROKERS, CHARTS, PROBES, Case, SECRET, SENSITIVE, components, fixtures, merge, read_yaml, secret_keys
 from manifest_checks import check_public_file, documents, instance_name, validate_manifest, volume_keys
 import validate_charts as runner
 
@@ -74,7 +75,22 @@ class FixtureTests(unittest.TestCase):
                     child = long_case.values[chart] if target == "ecco-sp" else long_case.values
                     self.assertEqual(len(long_case.release), 53)
                     self.assertTrue(all(len(i["name"]) == 63 for i in child["instance"]))
+                    scalar_values = cases["config-false-and-zero"].values
+                    child = scalar_values[chart] if target == "ecco-sp" else scalar_values
+                    item = child["instance"][0]
+                    self.assertIn({"subPath": "review-scalars.properties",
+                                   "content": "feature.enabled=false\nretry.count=0"}, item["configMap"])
+                    # Source-contract guard, not a Helm render. Legacy private
+                    # fixture fields are inert and do not prove scalar preservation.
+                    source = (runner.ROOT / "charts" / chart / "templates/configMap.yaml").read_text(encoding="utf-8")
+                    public_keys = set(re.findall(r"^  ([\w.-]+):", source, re.MULTILINE))
+                    self.assertFalse(public_keys & SENSITIVE[chart])
                     if chart not in BROKERS:
+                        self.assertIs(item["envConf"]["ecpLogFullStackTrace"], False)
+                        self.assertIs(item["jmxRemoteProperties"]["comSunManagementJmxRemoteAuthenticate"], False)
+                        self.assertIn("ecpLogFullStackTrace", source)
+                        self.assertIn("range $instance.jmxRemoteUsers", source)
+                        self.assertNotIn("$instance.jmxRemotePassword", source)
                         child = cases["session-true-custom-env"].values
                         child = child[chart] if target == "ecco-sp" else child
                         self.assertIs(child["instance"][0]["sessionReplication"], True)
@@ -319,6 +335,26 @@ class ManifestTests(unittest.TestCase):
         for value in (False, 0):
             self.docs[-1]["data"]["scalars.properties"] = value
             with self.assertRaisesRegex(ValueError, "Non-string ConfigMap"):
+                self.check(self.docs)
+        self.docs[-1]["data"]["scalars.properties"] = content
+        # Exercise the public JMX assertion, not private full-file contents.
+        item["jmxRemoteProperties"] = {"comSunManagementJmxRemoteAuthenticate": False}
+        pod = self.docs[0]["spec"]["template"]["spec"]
+        for key in ("jmxremote.password", "jmxremote.ssl"):
+            pod["volumes"][0]["projected"]["sources"][1]["secret"]["items"].append({"key": key, "path": key})
+            pod["containers"][0]["volumeMounts"].append({
+                "name": "config", "subPath": key, "mountPath": f"/etc/{key}", "readOnly": True,
+            })
+        for enabled in (False, True):
+            item["jmxRemoteProperties"]["comSunManagementJmxRemoteAuthenticate"] = enabled
+            self.docs[-1]["data"]["jmxremote.properties"] = (
+                f"com.sun.management.jmxremote.authenticate={str(enabled).lower()}"
+            )
+            self.check(self.docs)
+            self.docs[-1]["data"]["jmxremote.properties"] = (
+                f"com.sun.management.jmxremote.authenticate={str(not enabled).lower()}"
+            )
+            with self.assertRaisesRegex(ValueError, "Public JMX boolean ignored"):
                 self.check(self.docs)
 
     def test_all_charts_readiness_and_passive_broker_probes(self):
@@ -565,6 +601,57 @@ class RunnerTests(unittest.TestCase):
                                          ["source"] * len(cases) + ["packaged"] * len(cases))
                         self.assertEqual(copy.call_args_list[0].args[0].name, "ecp-endpoint-6.1.0.tgz")
                     self.assertEqual(package.call_args.args[2], metadata)
+
+
+def validate_local_schemas():
+    """Opt-in local check using existing jsonschema; no Helm or Secret contents.
+
+    Kept separate from unittest: Linux CI only needs PyYAML for the 39 unit
+    tests and uses Helm for schema/renderer/HA-helper integration validation.
+    """
+    import json
+    from collections import Counter
+    from jsonschema import Draft7Validator
+
+    validators = {}
+    for chart in CHARTS:
+        path = runner.ROOT / "charts" / chart / "values.schema.json"
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        Draft7Validator.check_schema(schema)
+        validators[chart] = Draft7Validator(schema)
+
+    counts = Counter()
+    for target in (*CHARTS, "ecco-sp"):
+        local = Counter()
+        for case in runner.validation_cases(runner.ROOT, target):
+            errors = [(chart, error)
+                      for chart, values in components(runner.ROOT, target, case.values).items()
+                      for error in validators[chart].iter_errors(values)]
+            if case.name == "raw-defaults" and case.reject:
+                if not errors or any(list(error.absolute_path)[-1:] != ["existingSecret"]
+                                     or error.instance != "" for _, error in errors):
+                    raise ValueError(f"{target}: expected only empty existingSecret rejection: {errors}")
+                category = "expected empty existingSecret rejection"
+            else:
+                if errors:
+                    details = [(chart, list(error.absolute_path), error.message) for chart, error in errors]
+                    raise ValueError(f"{target}/{case.name}: {details}")
+                category = "helper-only negative (not executed)" if case.reject else "positive schema validation"
+            local[category] += 1
+            counts[category] += 1
+        print(f"{target}: {dict(local)}")
+
+    examples = sorted((runner.ROOT / "ecco-sp").glob("values-*.yaml"))
+    if len(examples) != 6:
+        raise ValueError("Expected all six operator examples")
+    for path in examples:
+        effective = components(runner.ROOT, "ecco-sp", read_yaml(path))
+        if len(effective) != 1:
+            raise ValueError(f"{path.name}: expected exactly one enabled component")
+        for chart, values in effective.items():
+            validators[chart].validate(values)
+        print(f"example valid: {path.name}")
+    print(f"Schemas: {len(validators)}; examples: {len(examples)}; scenarios: {dict(counts)}")
 
 
 if __name__ == "__main__":
