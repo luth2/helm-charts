@@ -18,14 +18,12 @@ import validate_charts as runner
 class FixtureTests(unittest.TestCase):
     def test_shipped_probe_values_only_expose_enabled(self):
         expected = {probe: {"enabled": probe != "livenessProbe"} for probe in PROBES}
-        sources = [(runner.ROOT / "charts" / chart / "values.yaml", chart) for chart in CHARTS]
-        sources.extend((path, "ecco-sp") for path in sorted((runner.ROOT / "ecco-sp").glob("values-*.yaml")))
-        self.assertEqual(len(sources), 10)
-        for path, target in sources:
+        sources = [runner.ROOT / "charts" / chart / "values.yaml" for chart in CHARTS]
+        self.assertEqual(len(sources), 4)
+        for path in sources:
             with self.subTest(path=path):
                 values = read_yaml(path)
-                children = [values[chart] for chart in CHARTS if chart in values] if target == "ecco-sp" else [values]
-                instances = [item for child in children for item in child.get("instance", [])]
+                instances = values.get("instance", [])
                 self.assertTrue(instances)
                 for item in instances:
                     self.assertEqual({probe: item[probe] for probe in PROBES}, expected)
@@ -51,69 +49,60 @@ class FixtureTests(unittest.TestCase):
                 directory = root / "charts" / chart
                 directory.mkdir(parents=True)
                 (directory / "values.yaml").write_text(yaml.safe_dump(original), encoding="utf-8")
-            cases = {case.name: case for case in fixtures(root, "ecp-endpoint")}
-            baseline = cases["existing-secret"].values["instance"][0]
-            self.assertEqual(baseline["resourcesK8s"], original["instance"][0]["resourcesK8s"])
-            self.assertEqual(baseline["existingSecret"], SECRET)
-            self.assertEqual(cases["replicas-zero"].values["instance"][0]["replicaCount"], 0)
-            self.assertFalse(cases["probes-disabled"].values["instance"][0]["readinessProbe"]["enabled"])
-            multiple = cases["multiple-instances"].values["instance"]
-            multiple[1]["resourcesK8s"]["requests"]["cpu"] = "1"
-            self.assertEqual(baseline["resourcesK8s"]["requests"]["cpu"], "500m")
-            self.assertEqual(read_yaml(root / "charts/ecp-endpoint/values.yaml"), original)
-            umbrella = {case.name: case for case in fixtures(root, "ecco-sp")}
-            self.assertEqual(set(umbrella["all-dependencies-disabled"].values), set(CHARTS))
-            self.assertTrue(umbrella["ecp-broker-reject-invalid-ha"].reject)
-            self.assertTrue(umbrella["ecp-directory-reject-invalid-ha"].reject)
+            for chart in CHARTS:
+                with self.subTest(chart=chart):
+                    cases = {case.name: case for case in fixtures(root, chart)}
+                    baseline = cases["existing-secret"].values["instance"][0]
+                    self.assertEqual(baseline["resourcesK8s"], original["instance"][0]["resourcesK8s"])
+                    self.assertEqual(baseline["existingSecret"], SECRET)
+                    self.assertEqual(cases["replicas-zero"].values["instance"][0]["replicaCount"], 0)
+                    self.assertFalse(cases["probes-disabled"].values["instance"][0]["readinessProbe"]["enabled"])
+                    multiple = cases["multiple-instances"].values["instance"]
+                    multiple[1]["resourcesK8s"]["requests"]["cpu"] = "1"
+                    self.assertEqual(baseline["resourcesK8s"]["requests"]["cpu"], "500m")
+                    self.assertEqual(read_yaml(root / "charts" / chart / "values.yaml"), original)
+                    self.assertTrue(cases[f"{chart}-reject-invalid-ha"].reject)
+                    disabled = components(root, chart, cases["all-instances-disabled"].values)
+                    self.assertEqual(validate_manifest("", cases["all-instances-disabled"], disabled), [])
 
     def test_repo_fixtures_cover_new_contract(self):
-        # No Helm invocation and no metadata Git-index shortcut: unstaged deleted
-        # vendored files affect check_metadata(), not this values-only unit test.
-        for target in (*CHARTS, "ecco-sp"):
-            with self.subTest(target=target):
-                cases = {case.name: case for case in fixtures(runner.ROOT, target)}
+        # Source-contract guard, not a Helm render.
+        for chart in CHARTS:
+            with self.subTest(chart=chart):
+                cases = {case.name: case for case in fixtures(runner.ROOT, chart)}
                 self.assertIn("config-false-and-zero", cases)
                 self.assertIn("startup-disabled", cases)
                 self.assertIn("probe-defaults", cases)
                 self.assertIn("probe-empty-maps", cases)
                 self.assertIn("probes-enabled-only", cases)
-                charts = CHARTS if target == "ecco-sp" else (target,)
-                for chart in charts:
-                    enabled_only = cases["probes-enabled-only"].values
-                    child = enabled_only[chart] if target == "ecco-sp" else enabled_only
-                    self.assertEqual({p: child["instance"][0][p] for p in PROBES},
-                                     {p: {"enabled": True} for p in PROBES})
-                    self.assertTrue(cases[f"{chart}-reject-duplicate-name"].reject)
-                    self.assertTrue(cases[f"{chart}-reject-duplicate-fullnameOverride"].reject)
-                    case = cases["probes-zero-delay"]
-                    child = case.values[chart] if target == "ecco-sp" else case.values
-                    for probe in PROBES:
-                        self.assertIs(child["instance"][0][probe]["enabled"], True)
-                        self.assertEqual(child["instance"][0][probe]["initialDelaySeconds"], 0)
-                    long_case = cases["long-release-and-instances"]
-                    child = long_case.values[chart] if target == "ecco-sp" else long_case.values
-                    self.assertEqual(len(long_case.release), 53)
-                    self.assertTrue(all(len(i["name"]) == 63 for i in child["instance"]))
-                    scalar_values = cases["config-false-and-zero"].values
-                    child = scalar_values[chart] if target == "ecco-sp" else scalar_values
-                    item = child["instance"][0]
-                    self.assertIn({"subPath": "review-scalars.properties",
-                                   "content": "feature.enabled=false\nretry.count=0"}, item["configMap"])
-                    # Source-contract guard, not a Helm render. Legacy private
-                    # fixture fields are inert and do not prove scalar preservation.
-                    source = (runner.ROOT / "charts" / chart / "templates/configMap.yaml").read_text(encoding="utf-8")
-                    public_keys = set(re.findall(r"^  ([\w.-]+):", source, re.MULTILINE))
-                    self.assertFalse(public_keys & SENSITIVE[chart])
-                    if chart not in BROKERS:
-                        self.assertIs(item["envConf"]["ecpLogFullStackTrace"], False)
-                        self.assertIs(item["jmxRemoteProperties"]["comSunManagementJmxRemoteAuthenticate"], False)
-                        self.assertIn("ecpLogFullStackTrace", source)
-                        self.assertIn("range $instance.jmxRemoteUsers", source)
-                        self.assertNotIn("$instance.jmxRemotePassword", source)
-                        child = cases["session-true-custom-env"].values
-                        child = child[chart] if target == "ecco-sp" else child
-                        self.assertIs(child["instance"][0]["sessionReplication"], True)
-                        self.assertEqual(len(child["instance"][0]["env"]), 2)
+                enabled_only = cases["probes-enabled-only"].values
+                self.assertEqual({p: enabled_only["instance"][0][p] for p in PROBES},
+                                 {p: {"enabled": True} for p in PROBES})
+                self.assertTrue(cases[f"{chart}-reject-duplicate-name"].reject)
+                self.assertTrue(cases[f"{chart}-reject-duplicate-fullnameOverride"].reject)
+                child = cases["probes-zero-delay"].values
+                for probe in PROBES:
+                    self.assertIs(child["instance"][0][probe]["enabled"], True)
+                    self.assertEqual(child["instance"][0][probe]["initialDelaySeconds"], 0)
+                long_case = cases["long-release-and-instances"]
+                self.assertEqual(len(long_case.release), 53)
+                self.assertTrue(all(len(i["name"]) == 63 for i in long_case.values["instance"]))
+                item = cases["config-false-and-zero"].values["instance"][0]
+                self.assertIn({"subPath": "review-scalars.properties",
+                               "content": "feature.enabled=false\nretry.count=0"}, item["configMap"])
+                # Legacy private fixture fields are inert and do not prove scalar preservation.
+                source = (runner.ROOT / "charts" / chart / "templates/configMap.yaml").read_text(encoding="utf-8")
+                public_keys = set(re.findall(r"^  ([\w.-]+):", source, re.MULTILINE))
+                self.assertFalse(public_keys & SENSITIVE[chart])
+                if chart not in BROKERS:
+                    self.assertIs(item["envConf"]["ecpLogFullStackTrace"], False)
+                    self.assertIs(item["jmxRemoteProperties"]["comSunManagementJmxRemoteAuthenticate"], False)
+                    self.assertIn("ecpLogFullStackTrace", source)
+                    self.assertIn("range $instance.jmxRemoteUsers", source)
+                    self.assertNotIn("$instance.jmxRemotePassword", source)
+                    child = cases["session-true-custom-env"].values
+                    self.assertIs(child["instance"][0]["sessionReplication"], True)
+                    self.assertEqual(len(child["instance"][0]["env"]), 2)
 
 
 def probe_settings(kind, port="https"):
@@ -502,12 +491,10 @@ class TemplateBoundaryTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
-    def test_metadata_versions_follow_each_dependency(self):
-        with tempfile.TemporaryDirectory() as temporary, patch.object(runner, "ROOT", Path(temporary)), patch.object(
-            runner, "run", return_value=""
-        ):
+    def test_metadata_validates_each_standalone_chart(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(runner, "ROOT", Path(temporary)):
             metadata = {}
-            for index, name in enumerate((*CHARTS, "ecco-sp")):
+            for index, name in enumerate(CHARTS):
                 directory = runner.chart_directory(runner.ROOT, name)
                 directory.mkdir(parents=True)
                 metadata[name] = {"name": name, "apiVersion": "v2", "type": "application",
@@ -515,43 +502,53 @@ class RunnerTests(unittest.TestCase):
                 (directory / "values.yaml").write_text(yaml.safe_dump({
                     "global": {"storage": {"class": ""}}, "instance": [{"useSharedStorageForJournal": False}],
                 }), encoding="utf-8")
-            umbrella = metadata["ecco-sp"]
-            umbrella["dependencies"] = [
-                {"name": chart, "version": metadata[chart]["version"],
-                 "repository": f"file://../charts/{chart}", "condition": f"{chart}.enabled"}
-                for chart in CHARTS
-            ]
             for name, data in metadata.items():
                 (runner.chart_directory(runner.ROOT, name) / "Chart.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
             self.assertEqual(runner.check_metadata(), metadata)
-            # Dependency versions must never be inferred from application metadata.
-            umbrella["dependencies"][0]["version"] = metadata[CHARTS[0]]["appVersion"]
-            (runner.ROOT / "ecco-sp/Chart.yaml").write_text(yaml.safe_dump(umbrella), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Umbrella dependencies"):
-                runner.check_metadata()
+            self.assertEqual(len(metadata), 4)
+            for name, data in metadata.items():
+                path = runner.chart_directory(runner.ROOT, name) / "Chart.yaml"
+                for key, bad in (("name", "other"), ("apiVersion", "v1"), ("type", "library"),
+                                 ("kubeVersion", ">=1.20.0"), ("appVersion", ""), ("version", "05.0.0")):
+                    with self.subTest(chart=name, field=key):
+                        path.write_text(yaml.safe_dump({**data, key: bad}), encoding="utf-8")
+                        with self.assertRaisesRegex(ValueError, key):
+                            runner.check_metadata()
+                        path.write_text(yaml.safe_dump(data), encoding="utf-8")
 
-    def test_tracked_vendored_files_still_fail_ci(self):
-        with patch.object(runner, "run", return_value="ecco-sp/charts/ecp-endpoint/Chart.yaml\n"):
-            with self.assertRaisesRegex(ValueError, "removed from Git"):
-                runner.check_metadata()
+    def test_unsupported_targets_rejected_before_io_or_tools(self):
+        for target in ("ecco-sp", "unknown", "../ecp-endpoint"):
+            for operation in (
+                lambda: components(runner.ROOT, target, {}),
+                lambda: fixtures(runner.ROOT, target),
+                lambda: runner.validation_cases(runner.ROOT, target),
+                lambda: runner.chart_directory(runner.ROOT, target),
+                lambda: runner.validate(target),
+            ):
+                with self.subTest(target=target), patch.object(Path, "open") as opened, patch.object(runner, "run") as run:
+                    with self.assertRaisesRegex(ValueError, "Unsupported chart target"):
+                        operation()
+                    opened.assert_not_called()
+                    run.assert_not_called()
 
-    def test_raw_default_contract_and_disabled_umbrella(self):
+    def test_raw_default_contract_and_disabled_standalone(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for chart in CHARTS:
-                directory = root / "charts" / chart
-                directory.mkdir(parents=True)
-                (directory / "values.yaml").write_text(yaml.safe_dump({"instance": [{"name": "sample"}]}), encoding="utf-8")
-            (root / "ecco-sp").mkdir()
-            path = root / "ecco-sp/values.yaml"
-            path.write_text("{}", encoding="utf-8")
-            cases = runner.validation_cases(root, "ecco-sp")
-            self.assertEqual(cases[0].name, "raw-defaults")
-            self.assertEqual(cases[0].reject, "existingSecret")
-            disabled = next(case for case in cases if case.name == "all-dependencies-disabled")
-            self.assertEqual(components(root, "ecco-sp", disabled.values), {})
-            path.write_text(yaml.safe_dump(disabled.values), encoding="utf-8")
-            self.assertIsNone(runner.validation_cases(root, "ecco-sp")[0].reject)
+                with self.subTest(chart=chart):
+                    directory = root / "charts" / chart
+                    directory.mkdir(parents=True)
+                    path = directory / "values.yaml"
+                    path.write_text(yaml.safe_dump({"instance": [{"name": "sample"}]}), encoding="utf-8")
+                    cases = runner.validation_cases(root, chart)
+                    self.assertEqual(cases[0].name, "raw-defaults")
+                    self.assertEqual(cases[0].reject, "existingSecret")
+                    disabled = next(case for case in cases if case.name == "all-instances-disabled")
+                    effective = components(root, chart, disabled.values)
+                    self.assertEqual(set(effective), {chart})
+                    self.assertEqual(validate_manifest("", disabled, effective), [])
+                    path.write_text(yaml.safe_dump(disabled.values), encoding="utf-8")
+                    self.assertIsNone(runner.validation_cases(root, chart)[0].reject)
 
     def test_strict_semver(self):
         for version in ("5.0.0", "6.12.3", "6.0.0-rc.1", "6.0.0+build.5"):
@@ -585,23 +582,25 @@ class RunnerTests(unittest.TestCase):
                         runner.run(["helm", "template"], reject="existingSecret")
 
     def test_empty_render_still_runs_lint_and_kubeconform(self):
-        case = Case("disabled", {})
-        with tempfile.TemporaryDirectory() as temporary, patch.object(runner, "components", return_value={}), patch.object(
-            runner, "run", side_effect=["# empty\n", "", "Summary: 0 resources found"]
-        ) as run:
-            docs = runner.render(Path("chart"), "ecco-sp", case, Path(temporary), "source")
-            self.assertEqual(docs, [])
-            self.assertEqual([call.args[0][0] for call in run.call_args_list], ["helm", "helm", "kubeconform"])
-            self.assertEqual(run.call_args_list[-1].args[0][-1].read_text(encoding="utf-8"), "# empty\n")
+        for chart in CHARTS:
+            case = next(case for case in fixtures(runner.ROOT, chart) if case.name == "all-instances-disabled")
+            with self.subTest(chart=chart), tempfile.TemporaryDirectory() as temporary, patch.object(
+                runner, "run", side_effect=["# empty\n", "", "Summary: 0 resources found"]
+            ) as run:
+                docs = runner.render(runner.chart_directory(runner.ROOT, chart), chart, case, Path(temporary), "source")
+                self.assertEqual(docs, [])
+                self.assertEqual([call.args[0][0] for call in run.call_args_list], ["helm", "helm", "kubeconform"])
+                self.assertEqual(run.call_args_list[-1].args[0][-1].read_text(encoding="utf-8"), "# empty\n")
 
     def test_raw_defaults_error_stops_before_lint(self):
         case = Case("raw-defaults", {}, reject="existingSecret")
-        with tempfile.TemporaryDirectory() as temporary, patch.object(runner, "components", return_value={}), patch.object(
-            runner, "run", return_value=""
-        ) as run:
-            self.assertIsNone(runner.render(Path("chart"), "ecco-sp", case, Path(temporary), "source"))
-            run.assert_called_once()
-            self.assertEqual(run.call_args.kwargs["reject"], "existingSecret")
+        for chart in CHARTS:
+            with self.subTest(chart=chart), tempfile.TemporaryDirectory() as temporary, patch.object(
+                runner, "run", return_value=""
+            ) as run:
+                self.assertIsNone(runner.render(runner.chart_directory(runner.ROOT, chart), chart, case, Path(temporary), "source"))
+                run.assert_called_once()
+                self.assertEqual(run.call_args.kwargs["reject"], "existingSecret")
 
     def test_pipeline_rechecks_packages_and_blocks_manifest_drift(self):
         cases = [Case("raw-defaults", {}, reject="existingSecret"), Case("existing-secret", {}),
@@ -662,7 +661,7 @@ def validate_local_schemas():
         validators[chart] = Draft7Validator(schema)
 
     counts = Counter()
-    for target in (*CHARTS, "ecco-sp"):
+    for target in CHARTS:
         local = Counter()
         for case in runner.validation_cases(runner.ROOT, target):
             errors = [(chart, error)
@@ -685,28 +684,18 @@ def validate_local_schemas():
             counts[category] += 1
         print(f"{target}: {dict(local)}")
 
-    examples = sorted((runner.ROOT / "ecco-sp").glob("values-*.yaml"))
-    if len(examples) != 6:
-        raise ValueError("Expected all six operator examples")
-    for path in examples:
-        effective = components(runner.ROOT, "ecco-sp", read_yaml(path))
-        if len(effective) != 1:
-            raise ValueError(f"{path.name}: expected exactly one enabled component")
-        for chart, values in effective.items():
-            validators[chart].validate(values)
-        print(f"example valid: {path.name}")
-    print(f"Schemas: {len(validators)}; examples: {len(examples)}; scenarios: {dict(counts)}")
+    print(f"Schemas: {len(validators)}; scenarios: {dict(counts)}")
 
 
 def assert_gateway_schema_rejection(case, errors):
     """Do not let a Gateway-negative fixture excuse unrelated values errors."""
-    if not errors or not case.reject or not case.schema_keyword:
+    if not case.schema_reject or not errors or not case.reject or not case.schema_keyword:
         raise ValueError("Expected categorized Gateway schema rejection")
     for chart, error in errors:
         path = list(error.absolute_path)
         diagnostic = ".".join(map(str, path)) + ": " + error.message
         if (not case.name.startswith(chart + "-reject-gateway-")
-                or len(path) < 3 or path[0] != "instance" or path[2] != "gateway"
+                or len(path) < 3 or path[:3] != ["instance", 0, "gateway"]
                 or error.validator != case.schema_keyword
                 or not re.search(case.reject, diagnostic, re.IGNORECASE | re.DOTALL)):
             raise ValueError(f"Unexpected Gateway schema rejection category: {chart}/{path}/{error.validator}")

@@ -31,7 +31,8 @@ SEMVER = re.compile(
 
 
 def chart_directory(root, name):
-    return root / ("ecco-sp" if name == "ecco-sp" else f"charts/{name}")
+    require(name in CHARTS, f"Unsupported chart target: {name}")
+    return root / "charts" / name
 
 
 def run(command, reject=None):
@@ -46,10 +47,8 @@ def run(command, reject=None):
 
 
 def check_metadata():
-    tracked = run(["git", "ls-files", "ecco-sp/charts"])
-    require(not tracked.strip(), "Vendored umbrella chart copies must be removed from Git")
     all_metadata = {name: read_yaml(chart_directory(ROOT, name) / "Chart.yaml")
-                    for name in (*CHARTS, "ecco-sp")}
+                    for name in CHARTS}
     for name, metadata in all_metadata.items():
         directory = chart_directory(ROOT, name)
         for key, expected in {
@@ -62,21 +61,12 @@ def check_metadata():
         require(isinstance(metadata.get("version"), str) and SEMVER.fullmatch(metadata["version"]),
                 f"{name}: version must be strict SemVer")
         require((directory / "values.yaml").is_file(), f"{name}: values.yaml is required")
-        if name == "ecco-sp":
-            expected = [
-                {"name": chart, "version": all_metadata[chart]["version"], "repository": f"file://../charts/{chart}",
-                 "condition": f"{chart}.enabled"}
-                for chart in CHARTS
-            ]
-            require(metadata.get("dependencies") == expected, "Umbrella dependencies must point only to charts/")
-            require(not (directory / "requirements.yaml").exists(), "Legacy requirements.yaml remains")
-        else:
-            values = read_yaml(directory / "values.yaml")
-            require(values.get("global", {}).get("storage", {}).get("class") == "",
-                    f"{name}: global.storage.class default must be empty")
-            if name in BROKERS:
-                require(all(item.get("useSharedStorageForJournal") is False for item in values["instance"]),
-                        f"{name}: shared journal must be opt-in")
+        values = read_yaml(directory / "values.yaml")
+        require(values.get("global", {}).get("storage", {}).get("class") == "",
+            f"{name}: global.storage.class default must be empty")
+        if name in BROKERS:
+            require(all(item.get("useSharedStorageForJournal") is False for item in values["instance"]),
+                f"{name}: shared journal must be opt-in")
     return all_metadata
 
 
@@ -132,11 +122,11 @@ def unpack(package, destination):
 
 
 def validate(target):
+    chart = chart_directory(ROOT, target)
     metadata = check_metadata()
     version = run(["helm", "version", "--template", "{{.Version}}"])
     require(version.strip() == "v3.19.0", "CI requires Helm 3.19.0")
     require("0.7.0" in run(["kubeconform", "-v"]), "CI requires Kubeconform 0.7.0")
-    chart = chart_directory(ROOT, target)
     cases = validation_cases(ROOT, target)
     output = ROOT / ".ci-artifacts" / target / "publish"
     require(not output.exists(), f"Refusing to overwrite previous results: {output}")
@@ -171,6 +161,6 @@ def validate(target):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--chart", choices=(*CHARTS, "ecco-sp"), required=True)
+    parser.add_argument("--chart", choices=CHARTS, required=True)
     arguments = parser.parse_args()
     validate(arguments.chart)

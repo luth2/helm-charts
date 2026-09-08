@@ -6,7 +6,6 @@ on:
   pull_request:
     paths:
     - 'charts/**'
-    - 'ecco-sp/**'
     - '.github/**'
 
 permissions:
@@ -39,32 +38,5 @@ jobs:
       with:
         name: ci-charts-${{ matrix.chart }}
         path: .ci-artifacts/${{ matrix.chart }}/publish/
-        if-no-files-found: error
-        retention-days: 14
-
-  umbrella:
-    runs-on: ubuntu-24.04
-    steps:
-    - uses: actions/checkout@v5.0.0
-      with:
-        persist-credentials: false
-    - uses: actions/setup-python@v6.0.0
-      with:
-        python-version: '3.12'
-    - name: Install pinned validation tools (verified downloads)
-      run: |
-        bash .github/scripts/setup-tools.sh
-        python -m pip install --disable-pip-version-check PyYAML==6.0.2
-    - name: Build dependencies from the sole chart source
-      # Chart.lock is intentionally ignored. Without a lock, build performs an
-      # update and resolves the exact local versions declared in Chart.yaml.
-      run: helm dependency build ecco-sp
-    - name: Validate umbrella integration and packaged dependencies
-      run: python .github/scripts/validate_charts.py --chart ecco-sp
-    - name: Upload validated synthetic fixtures and umbrella package
-      uses: actions/upload-artifact@v7
-      with:
-        name: ci-charts-ecco-sp
-        path: .ci-artifacts/ecco-sp/publish/
         if-no-files-found: error
         retention-days: 14

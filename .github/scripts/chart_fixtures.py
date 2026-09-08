@@ -83,17 +83,10 @@ class Case:
 
 
 def components(root, target, overrides):
-    """Effective per-chart values, including umbrella conditions and globals."""
-    if target != "ecco-sp":
-        return {target: merge(read_yaml(root / "charts" / target / "values.yaml"), overrides)}
-    umbrella = merge(read_yaml(root / "ecco-sp" / "values.yaml"), overrides)
-    result = {}
-    for chart in CHARTS:
-        child = merge(read_yaml(root / "charts" / chart / "values.yaml"), umbrella.get(chart, {}))
-        if child.get("enabled", True):
-            child["global"] = merge(child.get("global", {}), umbrella.get("global", {}))
-            result[chart] = child
-    return result
+    """Effective values for one supported standalone chart."""
+    if target not in CHARTS:
+        raise ValueError(f"Unsupported chart target: {target}")
+    return {target: merge(read_yaml(root / "charts" / target / "values.yaml"), overrides)}
 
 
 def enabled_instances(values):
@@ -134,27 +127,17 @@ def external_db(chart, item):
 
 
 def fixtures(root, target):
-    charts = CHARTS if target == "ecco-sp" else (target,)
-    baseline = {}
-    for chart in charts:
-        values = synthetic(read_yaml(root / "charts" / chart / "values.yaml"))
-        if not values.get("instance"):
-            raise ValueError(f"{chart}: a sample instance is required to generate fixtures")
-        # Copy the complete first instance: replacing Helm lists by hand loses defaults.
-        item = deepcopy(values["instance"][0])
-        item.update(name="review-one", enabled=True, existingSecret=SECRET)
-        values["instance"] = [item]
-        values["enabled"] = True
-        baseline[chart] = values
-    base = baseline if target == "ecco-sp" else baseline[target]
-    if target == "ecco-sp":
-        base["global"] = {"storage": {"class": ""}}
+    base = synthetic(components(root, target, {})[target])
+    if not base.get("instance"):
+        raise ValueError(f"{target}: a sample instance is required to generate fixtures")
+    # Copy the complete first instance: replacing Helm lists by hand loses defaults.
+    item = deepcopy(base["instance"][0])
+    item.update(name="review-one", enabled=True, existingSecret=SECRET)
+    base["instance"] = [item]
 
     def edit(name, change):
         value = deepcopy(base)
-        for chart in charts:
-            child = value[chart] if target == "ecco-sp" else value
-            change(chart, child, child["instance"][0])
+        change(target, value, value["instance"][0])
         return Case(name, value)
 
     result = [Case("existing-secret", deepcopy(base))]
@@ -226,16 +209,14 @@ def fixtures(root, target):
 
     result.append(edit("config-false-and-zero", public_scalars))
 
-    if any(chart not in BROKERS for chart in charts):
-        result.append(edit("no-log-persistence", lambda c, v, i: i.update(keepLogsAfterRestart=False)
-                           if c not in BROKERS else None))
+    if target not in BROKERS:
+        result.append(edit("no-log-persistence", lambda c, v, i: i.update(keepLogsAfterRestart=False)))
         for enabled in (False, True):
             def session_env(chart, values, item):
-                if chart not in BROKERS:
-                    item.update(sessionReplication=enabled, env=[
-                        {"name": "REVIEW_CUSTOM", "value": "false-0"},
-                        {"name": "REVIEW_POD", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}},
-                    ])
+                item.update(sessionReplication=enabled, env=[
+                    {"name": "REVIEW_CUSTOM", "value": "false-0"},
+                    {"name": "REVIEW_POD", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}},
+                ])
             result.append(edit(f"session-{str(enabled).lower()}-custom-env", session_env))
 
     def multiple(chart, values, item):
@@ -320,7 +301,7 @@ def fixtures(root, target):
     result.append(gateway_case("gateway-disabled", lambda c, v, i: i["gateway"].update(enabled=False)))
     result.append(gateway_case("gateway-instance-disabled", lambda c, v, i: i.update(enabled=False, existingSecret="")))
 
-    # Each negative changes exactly one chart, so unrelated schema errors cannot hide.
+    # Each negative changes one field, so unrelated schema errors cannot hide.
     invalid_gateway = (
         ("absent-parent", lambda g: g.pop("parentRefs"), "required", r"gateway.*parentRefs"),
         ("empty-parent", lambda g: g.update(parentRefs=[]), "minItems", r"gateway.*parentRefs"),
@@ -341,30 +322,27 @@ def fixtures(root, target):
         ("tls-empty-ca", lambda g: g["backendTLS"].update(caCertificateRefs=[]), "minItems", r"gateway.*caCertificateRefs"),
         ("tls-multiple-ca", lambda g: g["backendTLS"]["caCertificateRefs"].append({"group": "", "kind": "ConfigMap", "name": "other-ca"}), "maxItems", r"gateway.*caCertificateRefs"),
         ("tls-system", lambda g: g.update(backendTLS={"hostname": "backend.example.invalid", "wellKnownCACertificates": "Other"}), "const", r"gateway.*wellKnownCACertificates"),
-        ("http-tls", lambda g: g.update(backendProtocol="http"), "not", r"gateway"),
+        ("http-tls", lambda g: g.update(backendProtocol="http"), "not", r"gateway.*(not|forbidden)"),
         ("protocol", lambda g: g.update(backendProtocol="tcp"), "enum", r"gateway.*backendProtocol"),
         ("path", lambda g: g.update(path="no-leading-slash"), "pattern", r"gateway.*path"),
     )
-    for chart in charts:
-        for suffix, mutate, keyword, reason in invalid_gateway:
-            case = gateway_case(f"{chart}-reject-gateway-{suffix}")
-            child = case.values[chart] if target == "ecco-sp" else case.values
-            mutate(child["instance"][0]["gateway"])
-            case.reject, case.schema_reject, case.schema_keyword = reason, True, keyword
-            result.append(case)
-        for protocol in ("http", "https"):
-            case = gateway_case(f"{chart}-reject-gateway-missing-{protocol}-port")
-            child = case.values[chart] if target == "ecco-sp" else case.values
-            item = child["instance"][0]
-            if protocol == "http":
-                gateway_http(chart, child, item)
-            else:
-                item["service"]["http"] = {"port": 18080}
-            # Removing the selected map keeps values schema-valid. The template
-            # helper must reject the absent selected port, not a Service schema.
-            item["service"].pop(protocol)
-            case.reject = rf"gateway.backendProtocol={protocol} requires service\.{protocol}\.port"
-            result.append(case)
+    for suffix, mutate, keyword, reason in invalid_gateway:
+        case = gateway_case(f"{target}-reject-gateway-{suffix}")
+        mutate(case.values["instance"][0]["gateway"])
+        case.reject, case.schema_reject, case.schema_keyword = reason, True, keyword
+        result.append(case)
+    for protocol in ("http", "https"):
+        case = gateway_case(f"{target}-reject-gateway-missing-{protocol}-port")
+        item = case.values["instance"][0]
+        if protocol == "http":
+            gateway_http(target, case.values, item)
+        else:
+            item["service"]["http"] = {"port": 18080}
+        # Removing the selected map keeps values schema-valid. The template
+        # helper must reject the absent selected port, not a Service schema.
+        item["service"].pop(protocol)
+        case.reject = rf"gateway.backendProtocol={protocol} requires service\.{protocol}\.port"
+        result.append(case)
 
     def ha(chart, values, item):
         item["replicaCount"] = 2
@@ -382,56 +360,41 @@ def fixtures(root, target):
     def storage(chart, values, item):
         values.setdefault("global", {}).setdefault("storage", {})["class"] = "review-rwo"
 
-    explicit_storage = edit("explicit-storage-class", storage)
-    if target == "ecco-sp":
-        explicit_storage.values["global"]["storage"]["class"] = "review-rwo"
-    result.append(explicit_storage)
+    result.append(edit("explicit-storage-class", storage))
 
-    for chart in charts:
-        for collision in ("name", "fullnameOverride"):
-            values = deepcopy(base)
-            child = values[chart] if target == "ecco-sp" else values
-            second = deepcopy(child["instance"][0])
-            if collision == "fullnameOverride":
-                child["instance"][0][collision] = second[collision] = "duplicate-resource"
-                second["name"] = "different-instance"
-            child["instance"].append(second)
-            result.append(Case(f"{chart}-reject-duplicate-{collision}", values,
-                               reject=r"duplicate instance[. ](name|resource name)"))
-        if chart not in BROKERS:
-            case = edit(f"{chart}-external-db", lambda c, v, i: external_db(c, i) if c == chart else None)
-            result.append(case)
-        invalid = deepcopy(base)
-        item = (invalid[chart] if target == "ecco-sp" else invalid)["instance"][0]
-        item["replicaCount"] = 2
-        if chart in BROKERS:
-            item["useSharedStorageForJournal"] = False
-            reject = r"useSharedStorageForJournal|shared.*journal|journal.*shared"
-        else:
-            key = "ecpProperties" if chart == "ecp-endpoint" else "ecpDirectoryProperties"
-            props = item.setdefault(key, {})
-            for field in ("springDatasourceDriverClassName", "ecpDBUrl", "ecpDBHostname"):
-                props.pop(field, None)
-            props["springProfilesActive"] = "ecp-nonha, console-logging"
-            reject = r"external.*(database|db)|ecp-ha|springDatasourceDriverClassName"
-        result.append(Case(f"{chart}-reject-invalid-ha", invalid, reject=reject))
-        if chart in BROKERS:
-            valid = next(case for case in result if case.name == "ha-valid")
-            for field, bad, reason in (
-                ("sharedStorageAccessMode", "ReadWriteOnce", r"ReadWriteMany|sharedStorageAccessMode"),
-                ("sharedStorageClassJournal", "", r"sharedStorageClassJournal|storage.class"),
-                ("useSharedStorageForConfiguration", True, r"useSharedStorageForConfiguration|shared.*configuration"),
-            ):
-                values = deepcopy(valid.values)
-                child = values[chart] if target == "ecco-sp" else values
-                child["instance"][0][field] = bad
-                result.append(Case(f"{chart}-reject-{field.lower()}", values, reject=reason))
-
-    if target == "ecco-sp":
-        result.append(Case("all-dependencies-disabled", {c: {"enabled": False} for c in CHARTS}))
-        for selected in CHARTS:
-            values = deepcopy(base)
-            for chart in CHARTS:
-                values[chart]["enabled"] = chart == selected
-            result.append(Case(f"only-{selected}", values))
+    for collision in ("name", "fullnameOverride"):
+        values = deepcopy(base)
+        second = deepcopy(values["instance"][0])
+        if collision == "fullnameOverride":
+            values["instance"][0][collision] = second[collision] = "duplicate-resource"
+            second["name"] = "different-instance"
+        values["instance"].append(second)
+        result.append(Case(f"{target}-reject-duplicate-{collision}", values,
+                           reject=r"duplicate instance[. ](name|resource name)"))
+    if target not in BROKERS:
+        result.append(edit(f"{target}-external-db", lambda c, v, i: external_db(c, i)))
+    invalid = deepcopy(base)
+    item = invalid["instance"][0]
+    item["replicaCount"] = 2
+    if target in BROKERS:
+        item["useSharedStorageForJournal"] = False
+        reject = r"useSharedStorageForJournal|shared.*journal|journal.*shared"
+    else:
+        key = "ecpProperties" if target == "ecp-endpoint" else "ecpDirectoryProperties"
+        props = item.setdefault(key, {})
+        for field in ("springDatasourceDriverClassName", "ecpDBUrl", "ecpDBHostname"):
+            props.pop(field, None)
+        props["springProfilesActive"] = "ecp-nonha, console-logging"
+        reject = r"external.*(database|db)|ecp-ha|springDatasourceDriverClassName"
+    result.append(Case(f"{target}-reject-invalid-ha", invalid, reject=reject))
+    if target in BROKERS:
+        valid = next(case for case in result if case.name == "ha-valid")
+        for field, bad, reason in (
+            ("sharedStorageAccessMode", "ReadWriteOnce", r"ReadWriteMany|sharedStorageAccessMode"),
+            ("sharedStorageClassJournal", "", r"sharedStorageClassJournal|storage.class"),
+            ("useSharedStorageForConfiguration", True, r"useSharedStorageForConfiguration|shared.*configuration"),
+        ):
+            values = deepcopy(valid.values)
+            values["instance"][0][field] = bad
+            result.append(Case(f"{target}-reject-{field.lower()}", values, reject=reason))
     return result

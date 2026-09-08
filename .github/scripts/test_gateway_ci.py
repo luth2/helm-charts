@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import yaml
 
-from chart_fixtures import BROKERS, CHARTS, Case, SECRET, components, fixtures, secret_keys
+from chart_fixtures import BROKERS, CHARTS, Case, fixtures, secret_keys
 import gateway_schemas as schemas
 from manifest_checks import documents, instance_name, validate_manifest
 import test_chart_ci as chart_tests
@@ -90,10 +90,14 @@ class GatewayFixtureTests(unittest.TestCase):
         chart_tests.assert_gateway_schema_rejection(case, [("ecp-endpoint", error)])
         for errors in ([], [("ecp-broker", error)],
                        [("ecp-endpoint", SimpleNamespace(**{**vars(error), "absolute_path": ["instance", 0, "service"]}))],
+                       [("ecp-endpoint", SimpleNamespace(**{**vars(error), "absolute_path": ["instance", 1, "gateway"]}))],
                        [("ecp-endpoint", SimpleNamespace(**{**vars(error), "validator": "oneOf"}))],
                        [("ecp-endpoint", SimpleNamespace(**{**vars(error), "message": "'other' is required"}))]):
             with self.subTest(errors=bool(errors)), self.assertRaises(ValueError):
                 chart_tests.assert_gateway_schema_rejection(case, errors)
+        case.schema_reject = False
+        with self.assertRaises(ValueError):
+            chart_tests.assert_gateway_schema_rejection(case, [("ecp-endpoint", error)])
 
 
 class GatewayManifestTests(unittest.TestCase):
