@@ -19,7 +19,8 @@ def unique_mapping(loader, node, deep=False):
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
         if key in mapping:
-            raise ValueError(f"Duplicate YAML mapping key: {key}")
+            raise ValueError(f"Duplicate YAML mapping key: {key} (rendered line {key_node.start_mark.line + 1}); "
+                             "check YAML document separators and template whitespace trimming")
         mapping[key] = loader.construct_object(value_node, deep=deep)
     return mapping
 

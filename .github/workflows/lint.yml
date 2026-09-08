@@ -35,7 +35,7 @@ jobs:
     - name: Lint, render, validate and test packaged chart
       run: python .github/scripts/validate_charts.py --chart '${{ matrix.chart }}'
     - name: Upload validated synthetic fixtures and package
-      uses: actions/upload-artifact@v4.6.2
+      uses: actions/upload-artifact@v7
       with:
         name: ci-charts-${{ matrix.chart }}
         path: .ci-artifacts/${{ matrix.chart }}/publish/
@@ -62,7 +62,7 @@ jobs:
     - name: Validate umbrella integration and packaged dependencies
       run: python .github/scripts/validate_charts.py --chart ecco-sp
     - name: Upload validated synthetic fixtures and umbrella package
-      uses: actions/upload-artifact@v4.6.2
+      uses: actions/upload-artifact@v7
       with:
         name: ci-charts-ecco-sp
         path: .ci-artifacts/ecco-sp/publish/

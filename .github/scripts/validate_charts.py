@@ -53,9 +53,11 @@ def check_metadata():
         directory = chart_directory(ROOT, name)
         for key, expected in {
             "name": name, "apiVersion": "v2", "type": "application",
-            "appVersion": "4.17.0", "kubeVersion": ">=1.28.0-0",
+            "kubeVersion": ">=1.28.0-0",
         }.items():
             require(metadata.get(key) == expected, f"{name}: unexpected {key}")
+        require(isinstance(metadata.get("appVersion"), str) and metadata["appVersion"].strip(),
+                f"{name}: appVersion must be a non-empty descriptive string")
         require(isinstance(metadata.get("version"), str) and SEMVER.fullmatch(metadata["version"]),
                 f"{name}: version must be strict SemVer")
         require((directory / "values.yaml").is_file(), f"{name}: values.yaml is required")
@@ -94,6 +96,7 @@ def package_path(directory, target, metadata):
 
 
 def render(chart, target, case, work, stage):
+    print(f"{target}/{stage}/{case.name}: starting lint/render/schema checks", flush=True)
     effective = components(ROOT, target, case.values)
     fixture = work / f"{case.name}.values.yaml"
     fixture.write_text(yaml.safe_dump(case.values, sort_keys=False), encoding="utf-8")

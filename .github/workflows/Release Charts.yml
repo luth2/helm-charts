@@ -43,7 +43,7 @@ jobs:
       run: bash .github/scripts/setup-tools.sh helm-only
 
     - name: Download packages from this run's successful validation
-      uses: actions/download-artifact@v4.3.0
+      uses: actions/download-artifact@v8
       with:
         pattern: ci-charts-*
         path: .ci-artifacts/release
@@ -75,6 +75,8 @@ jobs:
       shell: bash
       env:
         CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Chart metadata .Version, never .AppVersion. Shared by upload and index.
+        CR_RELEASE_NAME_TEMPLATE: '{{ .Name }}-{{ .Version }}'
       # v1.7.0 cr.sh main() only defines latest_tag in the packaging branch,
       # then unconditionally expands it with nounset. Use CLI, not an env shim:
       # https://github.com/helm/chart-releaser-action/blob/v1.7.0/cr.sh

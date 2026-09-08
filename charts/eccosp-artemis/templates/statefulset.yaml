@@ -25,7 +25,7 @@
 {{- $_ := set $files "broker.xml" "/opt/eccosp-artemis/etc/broker.xml" -}}
 {{- $secretKeys = append $secretKeys "broker.xml" -}}
 {{- end -}}
-{{- $mounts := dict "data" "/opt/eccosp-artemis/etc" "journal" "/opt/eccosp-artemis/data" "logs" "/opt/eccosp-artemis/log" -}}
+{{- $mounts := dict "data" "/opt/eccosp-artemis/etc" "journal" "/opt/eccosp-artemis/data" "logs" "/opt/eccosp-artemis/log" }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet

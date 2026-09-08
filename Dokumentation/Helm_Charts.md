@@ -15,6 +15,21 @@ verfuegbar und freigegeben sein. Alternativ ist `image.digest` mit SHA-256
 moeglich; bei gesetztem Digest hat dieser Vorrang vor dem Tag.
 `image.name` enthaelt das vollstaendige Repository; `image.registry` ist ungueltig.
 
+### Versionierung und Namen
+
+- `Chart.yaml: version` versioniert das Helm-Chart: Paket `ecp-broker-5.0.0.tgz`
+   und GitHub-Release/Tag `ecp-broker-5.0.0`. Bei Chart-Aenderungen diese Version
+   erhoehen und die zugehoerige Umbrella-Dependency anpassen.
+- `Chart.yaml: appVersion` beschreibt die Anwendung. Es darf unabhaengig von der
+   Chart-Version wechseln und bestimmt weder Paketnamen noch Dependency-Versionen.
+- `instance[].image.tag` bzw. `image.digest` bestimmt das tatsaechliche Containerimage;
+   `appVersion` setzt den Tag nicht automatisch.
+- Kubernetes-Ressourcennamen bleiben `<release>-<chart>-<instance>` (gegebenenfalls
+   gekuerzt/gehasht), ohne Chart- oder App-Version. Eine Version im StatefulSet-Namen
+   wuerde bei Upgrades neue Ressourcennamen und andere PVC-Zuordnungen erzeugen.
+- Bereits veroeffentlichte Chart-Versionen werden nicht ueberschrieben
+   (`skip-existing`). Fuer eine geaenderte Veroeffentlichung eine neue Chart-Version nutzen.
+
 | Chart | Aufgabe | Kanonische Defaults |
 | --- | --- | --- |
 | [../charts/ecp-endpoint/README.md](../charts/ecp-endpoint/README.md) | Endpoint | [../charts/ecp-endpoint/values.yaml](../charts/ecp-endpoint/values.yaml) |

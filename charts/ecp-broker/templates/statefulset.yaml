@@ -25,7 +25,7 @@
 {{- $_ := set $files "broker.xml" "/opt/ecp-broker/broker/etc/broker.xml" -}}
 {{- $secretKeys = append $secretKeys "broker.xml" -}}
 {{- end -}}
-{{- $mounts := dict "data" "/opt/ecp-broker/config" "etc" "/opt/ecp-broker/broker/etc" "journal" "/opt/ecp-broker/broker/data" "registrationtoollogs" "/opt/logs" "logs" "/opt/ecp-broker/broker/log" -}}
+{{- $mounts := dict "data" "/opt/ecp-broker/config" "etc" "/opt/ecp-broker/broker/etc" "journal" "/opt/ecp-broker/broker/data" "registrationtoollogs" "/opt/logs" "logs" "/opt/ecp-broker/broker/log" }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet

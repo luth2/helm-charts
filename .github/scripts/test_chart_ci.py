@@ -461,6 +461,27 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(instance_name("r", "c", {"name": "i" * 42})), 45)
 
 
+class TemplateBoundaryTests(unittest.TestCase):
+    def test_broker_statefulsets_keep_document_separator_newline(self):
+        # Regression for run 34252754761: the second instance's leading ---
+        # was joined to the previous PVC scalar by the $mounts right trim.
+        # Model only this literal boundary, not Go evaluation or Helm rendering.
+        for chart in BROKERS:
+            with self.subTest(chart=chart):
+                source = (runner.ROOT / "charts" / chart / "templates/statefulset.yaml").read_text(encoding="utf-8")
+                prefix = source.split("apiVersion: apps/v1", 1)[0]
+                boundary = re.search(r"(\{\{- \$mounts[^\n]*\}\})(\s*---\s*)$", prefix)
+                self.assertIsNotNone(boundary)
+                action, separator = boundary.groups()
+                self.assertFalse(action.endswith("-}}"), "Keep the newline before the next StatefulSet")
+                previous = "apiVersion: apps/v1\nkind: StatefulSet\nspec:\n  storage: 1Gi"
+                following = "apiVersion: apps/v1\nkind: StatefulSet\nspec:\n  storage: 1Gi\n"
+                self.assertEqual(len(documents(previous + separator + following)), 2)
+                # Restoring the old right trim must reproduce the reported error.
+                with self.assertRaisesRegex(ValueError, "Duplicate YAML mapping key: apiVersion"):
+                    documents(previous + separator.lstrip() + following)
+
+
 class RunnerTests(unittest.TestCase):
     def test_metadata_versions_follow_each_dependency(self):
         with tempfile.TemporaryDirectory() as temporary, patch.object(runner, "ROOT", Path(temporary)), patch.object(
@@ -471,7 +492,7 @@ class RunnerTests(unittest.TestCase):
                 directory = runner.chart_directory(runner.ROOT, name)
                 directory.mkdir(parents=True)
                 metadata[name] = {"name": name, "apiVersion": "v2", "type": "application",
-                                  "version": f"6.{index}.0", "appVersion": "4.17.0", "kubeVersion": ">=1.28.0-0"}
+                                  "version": f"6.{index}.0", "appVersion": f"4.{20 + index}.0-vendor", "kubeVersion": ">=1.28.0-0"}
                 (directory / "values.yaml").write_text(yaml.safe_dump({
                     "global": {"storage": {"class": ""}}, "instance": [{"useSharedStorageForJournal": False}],
                 }), encoding="utf-8")
@@ -484,7 +505,8 @@ class RunnerTests(unittest.TestCase):
             for name, data in metadata.items():
                 (runner.chart_directory(runner.ROOT, name) / "Chart.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
             self.assertEqual(runner.check_metadata(), metadata)
-            umbrella["dependencies"][0]["version"] = "5.0.0"
+            # Dependency versions must never be inferred from application metadata.
+            umbrella["dependencies"][0]["version"] = metadata[CHARTS[0]]["appVersion"]
             (runner.ROOT / "ecco-sp/Chart.yaml").write_text(yaml.safe_dump(umbrella), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Umbrella dependencies"):
                 runner.check_metadata()
@@ -521,7 +543,7 @@ class RunnerTests(unittest.TestCase):
     def test_package_uses_metadata_and_requires_exactly_one(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            metadata = {"version": "6.1.0-rc.2+build.7"}
+            metadata = {"version": "6.1.0-rc.2+build.7", "appVersion": "4.99.0"}
             path = root / "ecp-endpoint-6.1.0-rc.2+build.7.tgz"
             with self.assertRaisesRegex(ValueError, "exactly one"):
                 runner.package_path(root, "ecp-endpoint", metadata)
@@ -606,7 +628,7 @@ class RunnerTests(unittest.TestCase):
 def validate_local_schemas():
     """Opt-in local check using existing jsonschema; no Helm or Secret contents.
 
-    Kept separate from unittest: Linux CI only needs PyYAML for the 39 unit
+    Kept separate from unittest: Linux CI only needs PyYAML for the unit
     tests and uses Helm for schema/renderer/HA-helper integration validation.
     """
     import json
