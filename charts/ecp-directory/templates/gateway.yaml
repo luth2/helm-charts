@@ -1,0 +1,71 @@
+{{- range $instance := .Values.instance }}
+{{- if and (or (not (hasKey $instance "enabled")) $instance.enabled) (dig "gateway" "enabled" false $instance) }}
+{{- $name := include "ecp-directory.instanceName" (dict "root" $ "instance" $instance) -}}
+{{- $gateway := $instance.gateway -}}
+{{- $parents := required "gateway.parentRefs is required when gateway is enabled" $gateway.parentRefs -}}
+{{- $hosts := required "gateway.hostnames is required when gateway is enabled" $gateway.hostnames -}}
+{{- $protocol := default "https" $gateway.backendProtocol -}}
+{{- if not (has $protocol (list "http" "https")) -}}
+{{- fail "gateway.backendProtocol must be http or https" -}}
+{{- end -}}
+{{- $service := $instance.service | default dict -}}
+{{- $backend := get $service $protocol | default dict -}}
+{{- $port := required (printf "gateway.backendProtocol=%s requires service.%s.port" $protocol $protocol) $backend.port -}}
+{{- $tls := $gateway.backendTLS | default dict -}}
+{{- if eq $protocol "https" -}}
+{{- $_ := required "gateway.backendTLS.hostname is required for HTTPS" $tls.hostname -}}
+{{- if eq (hasKey $tls "caCertificateRefs") (hasKey $tls "wellKnownCACertificates") -}}
+{{- fail "gateway.backendTLS requires exactly one of caCertificateRefs or wellKnownCACertificates" -}}
+{{- end -}}
+{{- if hasKey $tls "caCertificateRefs" -}}
+{{- $_ := required "gateway.backendTLS.caCertificateRefs must not be empty" $tls.caCertificateRefs -}}
+{{- else -}}
+{{- $_ := required "gateway.backendTLS.wellKnownCACertificates must not be empty" $tls.wellKnownCACertificates -}}
+{{- end -}}
+{{- else if hasKey $gateway "backendTLS" -}}
+{{- fail "gateway.backendTLS is forbidden when gateway.backendProtocol=http" -}}
+{{- end -}}
+{{- printf "\n---\n" -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-route
+  labels:
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+  {{- with $gateway.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs: {{ toYaml $parents | nindent 4 }}
+  hostnames: {{ toYaml $hosts | nindent 4 }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ default "/" $gateway.path | quote }}
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ $name }}-svc
+          port: {{ $port }}
+          weight: 1
+{{- if eq $protocol "https" }}
+{{- printf "\n---\n" -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: {{ $name }}-backend-tls
+  labels:
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: {{ $name }}-svc
+      sectionName: https
+  validation: {{ toYaml $tls | nindent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}

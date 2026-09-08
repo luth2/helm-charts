@@ -16,6 +16,20 @@ import validate_charts as runner
 
 
 class FixtureTests(unittest.TestCase):
+    def test_shipped_probe_values_only_expose_enabled(self):
+        expected = {probe: {"enabled": probe != "livenessProbe"} for probe in PROBES}
+        sources = [(runner.ROOT / "charts" / chart / "values.yaml", chart) for chart in CHARTS]
+        sources.extend((path, "ecco-sp") for path in sorted((runner.ROOT / "ecco-sp").glob("values-*.yaml")))
+        self.assertEqual(len(sources), 10)
+        for path, target in sources:
+            with self.subTest(path=path):
+                values = read_yaml(path)
+                children = [values[chart] for chart in CHARTS if chart in values] if target == "ecco-sp" else [values]
+                instances = [item for child in children for item in child.get("instance", [])]
+                self.assertTrue(instances)
+                for item in instances:
+                    self.assertEqual({probe: item[probe] for probe in PROBES}, expected)
+
     def test_merge_preserves_inputs_and_replaces_lists(self):
         original = {"instance": [{"name": "one"}], "global": {"storage": {"class": ""}}}
         result = merge(original, {"instance": [{"name": "two"}]})
@@ -62,8 +76,13 @@ class FixtureTests(unittest.TestCase):
                 self.assertIn("startup-disabled", cases)
                 self.assertIn("probe-defaults", cases)
                 self.assertIn("probe-empty-maps", cases)
+                self.assertIn("probes-enabled-only", cases)
                 charts = CHARTS if target == "ecco-sp" else (target,)
                 for chart in charts:
+                    enabled_only = cases["probes-enabled-only"].values
+                    child = enabled_only[chart] if target == "ecco-sp" else enabled_only
+                    self.assertEqual({p: child["instance"][0][p] for p in PROBES},
+                                     {p: {"enabled": True} for p in PROBES})
                     self.assertTrue(cases[f"{chart}-reject-duplicate-name"].reject)
                     self.assertTrue(cases[f"{chart}-reject-duplicate-fullnameOverride"].reject)
                     case = cases["probes-zero-delay"]
@@ -654,6 +673,9 @@ def validate_local_schemas():
                                      or error.instance != "" for _, error in errors):
                     raise ValueError(f"{target}: expected only empty existingSecret rejection: {errors}")
                 category = "expected empty existingSecret rejection"
+            elif case.schema_reject:
+                assert_gateway_schema_rejection(case, errors)
+                category = "expected gateway schema rejection"
             else:
                 if errors:
                     details = [(chart, list(error.absolute_path), error.message) for chart, error in errors]
@@ -674,6 +696,20 @@ def validate_local_schemas():
             validators[chart].validate(values)
         print(f"example valid: {path.name}")
     print(f"Schemas: {len(validators)}; examples: {len(examples)}; scenarios: {dict(counts)}")
+
+
+def assert_gateway_schema_rejection(case, errors):
+    """Do not let a Gateway-negative fixture excuse unrelated values errors."""
+    if not errors or not case.reject or not case.schema_keyword:
+        raise ValueError("Expected categorized Gateway schema rejection")
+    for chart, error in errors:
+        path = list(error.absolute_path)
+        diagnostic = ".".join(map(str, path)) + ": " + error.message
+        if (not case.name.startswith(chart + "-reject-gateway-")
+                or len(path) < 3 or path[0] != "instance" or path[2] != "gateway"
+                or error.validator != case.schema_keyword
+                or not re.search(case.reject, diagnostic, re.IGNORECASE | re.DOTALL)):
+            raise ValueError(f"Unexpected Gateway schema rejection category: {chart}/{path}/{error.validator}")
 
 
 if __name__ == "__main__":

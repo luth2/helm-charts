@@ -78,6 +78,8 @@ class Case:
     release: str = "review"
     namespace: str = "review-namespace"
     reject: str | None = None
+    schema_reject: bool = False
+    schema_keyword: str | None = None
 
 
 def components(root, target, overrides):
@@ -173,6 +175,11 @@ def fixtures(root, target):
 
     result.append(edit("probe-defaults", probe_defaults))
     result.append(edit("probe-empty-maps", lambda c, v, i: i.update({p: {} for p in PROBES})))
+    # Public Values expose only enabled; exercise default timings for all probes,
+    # including liveness, which is off in the shipped defaults.
+    result.append(edit("probes-enabled-only", lambda c, v, i: i.update({
+        p: {"enabled": True} for p in PROBES
+    })))
 
     def probes_on(chart, values, item):
         for probe in PROBES:
@@ -249,6 +256,115 @@ def fixtures(root, target):
         }
 
     result.append(edit("ingress", ingress))
+
+    def gateway(chart, values, item):
+        # Keep HTTPS present even for HTTP fixtures: probe selection must not change.
+        item.setdefault("service", {}).setdefault("https", {"port": 8443})
+        item["gateway"] = {
+            "enabled": True,
+            "parentRefs": [{"name": "review-gateway"}],
+            "hostnames": [f"{chart}.example.invalid"],
+            "backendTLS": {
+                "hostname": f"{chart}.backend.example.invalid",
+                "caCertificateRefs": [{"group": "", "kind": "ConfigMap", "name": "review-ca"}],
+            },
+        }
+
+    def gateway_case(name, change=None):
+        def configure(chart, values, item):
+            gateway(chart, values, item)
+            if change:
+                change(chart, values, item)
+        return edit(name, configure)
+
+    result.append(gateway_case("gateway-https"))  # Protocol and path deliberately absent.
+    result.append(gateway_case("gateway-system-ca", lambda c, v, i: i["gateway"].update(
+        backendProtocol="https", backendTLS={"hostname": f"{c}.backend.example.invalid",
+                                             "wellKnownCACertificates": "System"})))
+
+    def gateway_http(chart, values, item):
+        item["gateway"]["backendProtocol"] = "http"
+        item["gateway"].pop("backendTLS")
+        item["service"]["http"] = {"port": 18080}
+
+    result.append(gateway_case("gateway-http", gateway_http))
+
+    def gateway_custom(chart, values, item):
+        item["gateway"].update(
+            path="/console/api", hostnames=[f"{chart}.example.invalid", f"*.{chart}.example.invalid"],
+            parentRefs=[{"name": "shared-gateway", "namespace": "networking", "sectionName": "web",
+                         "group": "gateway.networking.k8s.io", "kind": "Gateway"}],
+            annotations={"review.example.invalid/owner": "chart-ci", "review.example.invalid/flag": "false"},
+        )
+        item["service"]["https"]["port"] = 18443
+
+    custom = gateway_case("gateway-custom", gateway_custom)
+    custom.namespace = "tenant-gateway"
+    result.append(custom)
+    result.append(gateway_case("gateway-ingress-migration", ingress))
+
+    def gateway_multiple(chart, values, item):
+        long_names(chart, values, item)
+        values["instance"][1]["gateway"]["hostnames"] = [f"second.{chart}.example.invalid"]
+        fixed = deepcopy(item)
+        fixed.update(name="fixed-instance", fullnameOverride=f"fixed-{chart}")
+        fixed["gateway"]["hostnames"] = [f"fixed.{chart}.example.invalid"]
+        disabled = deepcopy(item)
+        disabled.update(name="disabled-instance", enabled=False, existingSecret="")
+        disabled["gateway"]["hostnames"] = [f"disabled.{chart}.example.invalid"]
+        values["instance"] += [fixed, disabled]
+
+    multiple_gateway = gateway_case("gateway-multiple-instances", gateway_multiple)
+    multiple_gateway.release = "release-" + "r" * 45
+    result.append(multiple_gateway)
+    result.append(gateway_case("gateway-disabled", lambda c, v, i: i["gateway"].update(enabled=False)))
+    result.append(gateway_case("gateway-instance-disabled", lambda c, v, i: i.update(enabled=False, existingSecret="")))
+
+    # Each negative changes exactly one chart, so unrelated schema errors cannot hide.
+    invalid_gateway = (
+        ("absent-parent", lambda g: g.pop("parentRefs"), "required", r"gateway.*parentRefs"),
+        ("empty-parent", lambda g: g.update(parentRefs=[]), "minItems", r"gateway.*parentRefs"),
+        ("multiple-parents", lambda g: g["parentRefs"].append({"name": "other"}), "maxItems", r"gateway.*parentRefs"),
+        ("parent-name", lambda g: g["parentRefs"][0].pop("name"), "required", r"gateway.*parentRefs.*name"),
+        ("parent-kind", lambda g: g["parentRefs"][0].update(kind="Service"), "const", r"gateway.*parentRefs.*kind"),
+        ("parent-group", lambda g: g["parentRefs"][0].update(group=""), "const", r"gateway.*parentRefs.*group"),
+        ("absent-host", lambda g: g.pop("hostnames"), "required", r"gateway.*hostnames"),
+        ("empty-host", lambda g: g.update(hostnames=[]), "minItems", r"gateway.*hostnames"),
+        ("absent-tls", lambda g: g.pop("backendTLS"), "required", r"gateway.*backendTLS"),
+        ("tls-hostname", lambda g: g["backendTLS"].pop("hostname"), "required", r"gateway.*backendTLS.*hostname"),
+        ("tls-trust", lambda g: g["backendTLS"].pop("caCertificateRefs"), "oneOf", r"gateway.*backendTLS"),
+        ("tls-dual-trust", lambda g: g["backendTLS"].update(wellKnownCACertificates="System"), "oneOf", r"gateway.*backendTLS"),
+        ("tls-wildcard", lambda g: g["backendTLS"].update(hostname="*.example.invalid"), "pattern", r"gateway.*backendTLS.*hostname"),
+        ("tls-ca-kind", lambda g: g["backendTLS"]["caCertificateRefs"][0].update(kind="Secret"), "const", r"gateway.*caCertificateRefs.*kind"),
+        ("tls-ca-group", lambda g: g["backendTLS"]["caCertificateRefs"][0].update(group="other"), "const", r"gateway.*caCertificateRefs.*group"),
+        ("tls-ca-name", lambda g: g["backendTLS"]["caCertificateRefs"][0].pop("name"), "required", r"gateway.*caCertificateRefs.*name"),
+        ("tls-empty-ca", lambda g: g["backendTLS"].update(caCertificateRefs=[]), "minItems", r"gateway.*caCertificateRefs"),
+        ("tls-multiple-ca", lambda g: g["backendTLS"]["caCertificateRefs"].append({"group": "", "kind": "ConfigMap", "name": "other-ca"}), "maxItems", r"gateway.*caCertificateRefs"),
+        ("tls-system", lambda g: g.update(backendTLS={"hostname": "backend.example.invalid", "wellKnownCACertificates": "Other"}), "const", r"gateway.*wellKnownCACertificates"),
+        ("http-tls", lambda g: g.update(backendProtocol="http"), "not", r"gateway"),
+        ("protocol", lambda g: g.update(backendProtocol="tcp"), "enum", r"gateway.*backendProtocol"),
+        ("path", lambda g: g.update(path="no-leading-slash"), "pattern", r"gateway.*path"),
+    )
+    for chart in charts:
+        for suffix, mutate, keyword, reason in invalid_gateway:
+            case = gateway_case(f"{chart}-reject-gateway-{suffix}")
+            child = case.values[chart] if target == "ecco-sp" else case.values
+            mutate(child["instance"][0]["gateway"])
+            case.reject, case.schema_reject, case.schema_keyword = reason, True, keyword
+            result.append(case)
+        for protocol in ("http", "https"):
+            case = gateway_case(f"{chart}-reject-gateway-missing-{protocol}-port")
+            child = case.values[chart] if target == "ecco-sp" else case.values
+            item = child["instance"][0]
+            if protocol == "http":
+                gateway_http(chart, child, item)
+            else:
+                item["service"]["http"] = {"port": 18080}
+            # Removing the selected map keeps values schema-valid. The template
+            # helper must reject the absent selected port, not a Service schema.
+            item["service"].pop(protocol)
+            case.reject = rf"gateway.backendProtocol={protocol} requires service\.{protocol}\.port"
+            result.append(case)
 
     def ha(chart, values, item):
         item["replicaCount"] = 2

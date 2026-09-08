@@ -29,6 +29,7 @@
           "databaseWait": {"type": "object", "properties": {"enabled": {"const": false}}, "additionalProperties": true},
           "service": {"$ref": "#/definitions/service"},
           "ingress": {"$ref": "#/definitions/ingress"},
+          "gateway": {"$ref": "#/definitions/gateway"},
           "template": {"$ref": "#/definitions/template"},
           "ecpDirectoryProperties": {"type": "object", "additionalProperties": true},
           "env": {"type": "array", "items": {"type": "object"}},
@@ -99,6 +100,71 @@
         "http": {"$ref": "#/definitions/port"}, "https": {"$ref": "#/definitions/port"},
         "annotations": {"type": ["object", "null"], "additionalProperties": {"type": "string"}}, "loadBalancerIP": {"type": "string"}
       }
+    },
+    "gatewayDNSName": {
+      "type": "string", "minLength": 1, "maxLength": 253,
+      "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$"
+    },
+    "gatewayBackendTLS": {
+      "type": "object", "additionalProperties": false, "required": ["hostname"],
+      "properties": {
+        "hostname": {"$ref": "#/definitions/gatewayDNSName"},
+        "caCertificateRefs": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["group", "kind", "name"],
+            "properties": {
+              "group": {"const": ""}, "kind": {"const": "ConfigMap"},
+              "name": {"$ref": "#/definitions/gatewayDNSName"}
+            }
+          }
+        },
+        "wellKnownCACertificates": {"const": "System"}
+      },
+      "oneOf": [{"required": ["caCertificateRefs"]}, {"required": ["wellKnownCACertificates"]}]
+    },
+    "gateway": {
+      "description": "Optional web routing alongside Ingress. MVP attaches to exactly one existing Gateway parent; no parent port selector.",
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean", "default": false},
+        "parentRefs": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["name"],
+            "properties": {
+              "name": {"$ref": "#/definitions/gatewayDNSName"},
+              "namespace": {"$ref": "#/definitions/name"}, "sectionName": {"$ref": "#/definitions/name"},
+              "group": {"const": "gateway.networking.k8s.io"}, "kind": {"const": "Gateway"}
+            }
+          }
+        },
+        "hostnames": {
+          "type": "array", "minItems": 1, "maxItems": 16,
+          "items": {
+            "type": "string", "minLength": 1, "maxLength": 253,
+            "pattern": "^(\\*\\.)?[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$"
+          }
+        },
+        "path": {"type": "string", "default": "/", "maxLength": 1024, "pattern": "^/([^/?#]+/)*[^/?#]*$"},
+        "backendProtocol": {"type": "string", "enum": ["http", "https"], "default": "https"},
+        "backendTLS": {"$ref": "#/definitions/gatewayBackendTLS"},
+        "annotations": {"$ref": "#/definitions/stringMap"}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["enabled"], "properties": {"enabled": {"const": true}}},
+          "then": {
+            "required": ["parentRefs", "hostnames"],
+            "if": {"properties": {"backendProtocol": {"const": "https"}}},
+            "then": {"required": ["backendTLS"]}
+          }
+        },
+        {
+          "if": {"required": ["backendProtocol"], "properties": {"backendProtocol": {"const": "http"}}},
+          "then": {"not": {"required": ["backendTLS"]}}
+        }
+      ]
     },
     "ingress": {
       "type": "object", "additionalProperties": true,

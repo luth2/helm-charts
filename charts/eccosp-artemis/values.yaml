@@ -35,27 +35,13 @@ instance:
   sharedStorageSizeJournal: 1Gi
   sharedStorageAccessMode: ReadWriteMany
   # Single: TCP. HA: Startup/Liveness pruefen nur PID 1; Readiness bleibt TCP.
+  # Probe-Aktionen und Timing-Defaults kommen aus dem StatefulSet-Template-Helper.
   startupProbe:
     enabled: true
-    initialDelaySeconds: 0
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 60
-    successThreshold: 1
   readinessProbe:
     enabled: true
-    initialDelaySeconds: 0
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 3
-    successThreshold: 1
   livenessProbe:
     enabled: false
-    initialDelaySeconds: 0
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 3
-    successThreshold: 1
   service:
     type: ClusterIP
     https:
@@ -64,6 +50,9 @@ instance:
       port: 5672 # Listener/TLS im externen Broker-XML konfigurieren.
     annotations: {}
   ingress:
+    enabled: false
+  gateway:
+    # Vorhandenes Gateway, ein parentRef (MVP); siehe README.md und Dokumentation/Helm_Charts.md.
     enabled: false
   brokerXml:
     highAvailability:

@@ -16,6 +16,7 @@ import tempfile
 import yaml
 
 from chart_fixtures import BROKERS, CHARTS, Case, components, enabled_instances, fixtures, read_yaml
+from gateway_schemas import ensure_gateway_schemas
 from manifest_checks import require, validate_manifest
 
 
@@ -113,7 +114,12 @@ def render(chart, target, case, work, stage):
     manifest.write_text(text, encoding="utf-8")
     # Do not skip the empty manifest: disabled fixtures must validate too.
     # Kubeconform v0.7.0 processResults starts with success=true (zero is valid).
-    summary = run(["kubeconform", "-strict", "-summary", "-kubernetes-version", KUBERNETES_VERSION, manifest])
+    locations = ["-schema-location", "default"]
+    gateway_location = ensure_gateway_schemas(work, docs)
+    if gateway_location:
+        locations += ["-schema-location", gateway_location]
+    summary = run(["kubeconform", "-strict", "-summary", "-kubernetes-version", KUBERNETES_VERSION,
+                   *locations, manifest])
     print(f"{stage}/{case.name}: {summary.strip()}", flush=True)
     return docs
 

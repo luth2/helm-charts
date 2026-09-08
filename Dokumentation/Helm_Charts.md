@@ -285,6 +285,13 @@ des Deployment-/Storage-Konzepts, nicht pauschal mehr Rechte.
 
 ### Aussagekraft der Probes
 
+Die ausgelieferten Values und Umbrella-Beispiele enthalten pro Probe nur
+`enabled`: Startup und Readiness sind an, Liveness ist aus. Aktionen, Ports und
+Timing-Defaults liegen im jeweiligen `*.probes`-Template-Helper, den das
+StatefulSet einbindet. Die Standardwerte muessen nicht in Values wiederholt werden.
+Bestehende explizite Timing-Overrides bleiben optional unterstuetzt; das
+Standardverhalten aendert sich durch die vereinfachten Values nicht.
+
 | Probe | Default | Bedeutung |
 | --- | --- | --- |
 | Startup | an, 10s Intervall, 2s Timeout, 60 Fehlversuche | EP/CD und Single-Broker: TCP; HA-Broker: nur `kill -0 1` |

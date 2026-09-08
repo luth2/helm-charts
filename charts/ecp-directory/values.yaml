@@ -29,33 +29,22 @@ instance:
   storageLogs: 256Mi
   keepLogsAfterRestart: true
   # TCP-Erreichbarkeit, keine DB-, TLS- oder fachliche Gesundheitspruefung.
+  # Probe-Aktionen und Timing-Defaults kommen aus dem StatefulSet-Template-Helper.
   startupProbe:
     enabled: true
-    initialDelaySeconds: 0
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 60
-    successThreshold: 1
   readinessProbe:
     enabled: true
-    initialDelaySeconds: 0
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 3
-    successThreshold: 1
   livenessProbe:
     enabled: false
-    initialDelaySeconds: 0
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 3
-    successThreshold: 1
   service:
     type: ClusterIP
     https:
       port: 8443 # Externes server.xml muss denselben Listener konfigurieren.
     annotations: {}
   ingress:
+    enabled: false
+  gateway:
+    # Vorhandenes Gateway, ein parentRef (MVP); siehe README.md und Dokumentation/Helm_Charts.md.
     enabled: false
   ecpDirectoryProperties:
     # Abgleich mit externer ecp-directory.properties, keine Vollfile-Erzeugung.

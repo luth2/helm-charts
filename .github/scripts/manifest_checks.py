@@ -136,6 +136,61 @@ def volume_keys(volume, configmaps, sensitive, existing_secret):
     return (keys if config_backed else None), secrets
 
 
+def validate_gateway(docs, expected, services, workloads):
+    """Check the complete route/TLS contract without logging manifest contents."""
+    api_version = "gateway.networking.k8s.io/v1"
+    wanted = {}
+    for prefix, (_, _, item) in expected.items():
+        gateway = item.get("gateway", {})
+        if not gateway.get("enabled", False):
+            continue
+        protocol = gateway.get("backendProtocol", "https")
+        require(protocol in ("http", "https"), "Gateway backend protocol invalid")
+        port = item.get("service", {}).get(protocol, {}).get("port")
+        require(type(port) is int and 1 <= port <= 65535, "Gateway selected Service port missing/invalid")
+        service_name = prefix + "-svc"
+        service = services.get(service_name)
+        require(service is not None, "Gateway backend Service missing")
+        require(service.get("apiVersion") == "v1", "Gateway backend Service apiVersion mismatch")
+        ports = [p for p in service["spec"].get("ports", []) if p.get("name") == protocol]
+        require(len(ports) == 1 and type(ports[0].get("port")) is int and ports[0]["port"] == port,
+                "Gateway backend Service port mismatch")
+        labels = workloads[prefix]["spec"]["template"]["metadata"]["labels"]
+        require(selected(service["spec"].get("selector", {}), labels), "Gateway backend selects another instance")
+        wanted[("HTTPRoute", prefix + "-route")] = ({
+            "parentRefs": gateway["parentRefs"], "hostnames": gateway["hostnames"],
+            "rules": [{"matches": [{"path": {"type": "PathPrefix", "value": gateway.get("path", "/")}}],
+                       "backendRefs": [{"group": "", "kind": "Service", "name": service_name,
+                                        "port": port, "weight": 1}]}],
+        }, gateway.get("annotations", {}))
+        if protocol == "https":
+            require(bool(gateway.get("backendTLS")), "Gateway backendTLS missing")
+            wanted[("BackendTLSPolicy", prefix + "-backend-tls")] = ({
+                "targetRefs": [{"group": "", "kind": "Service", "name": service_name, "sectionName": "https"}],
+                "validation": gateway["backendTLS"],
+            }, {})
+        else:
+            require("backendTLS" not in gateway, "Gateway HTTP must not configure backendTLS")
+
+    actual = {}
+    for doc in docs:
+        kind = doc.get("kind")
+        group = doc.get("apiVersion", "").split("/")[0]
+        require(kind not in ("Gateway", "GatewayClass", "CustomResourceDefinition"),
+                "Gateway resources/CRDs must not be managed")
+        if group == "gateway.networking.k8s.io" or kind in ("HTTPRoute", "BackendTLSPolicy"):
+            identity = (kind, doc["metadata"]["name"])
+            require(identity not in actual, "Duplicate Gateway resource")
+            actual[identity] = doc
+    require(set(actual) == set(wanted), "Missing, extra or incorrectly named Gateway resources")
+    for identity, (spec, annotations) in wanted.items():
+        doc = actual[identity]
+        require(doc.get("apiVersion") == api_version, f"Gateway {identity[0]} apiVersion mismatch")
+        require(doc.get("spec") == spec, f"Gateway {identity[0]} spec mismatch")
+        require(doc["metadata"].get("annotations", {}) == annotations,
+                f"Gateway {identity[0]} annotations mismatch")
+
+
 def validate_manifest(text, case, effective):
     docs = documents(text)
     resources = {}
@@ -174,6 +229,7 @@ def validate_manifest(text, case, effective):
     require(len(expected) == sum(len(enabled_instances(v)) for v in effective.values()),
             "Duplicate cross-chart resource name")
     require(set(workloads) == set(expected), "Missing, extra or incorrectly named StatefulSets")
+    validate_gateway(docs, expected, services, workloads)
     if not expected:
         require(not docs, "Disabled components must not emit resources")
         return docs
