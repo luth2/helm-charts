@@ -39,41 +39,40 @@ class GatewayFixtureTests(unittest.TestCase):
         positive = {"gateway-https", "gateway-system-ca", "gateway-http", "gateway-custom",
                     "gateway-ingress-migration", "gateway-multiple-instances", "gateway-disabled",
                     "gateway-instance-disabled"}
-        for target in (*CHARTS, "ecco-sp"):
-            with self.subTest(target=target):
-                cases = fixtures(runner.ROOT, target)
+        for chart in CHARTS:
+            with self.subTest(chart=chart):
+                cases = fixtures(runner.ROOT, chart)
                 by_name = {case.name: case for case in cases}
                 self.assertEqual(len(cases), len(by_name))
                 self.assertTrue(positive <= by_name.keys())
-                charts = CHARTS if target == "ecco-sp" else (target,)
-                for chart in charts:
-                    def item(name):
-                        value = by_name[name].values
-                        return (value[chart] if target == "ecco-sp" else value)["instance"][0]
-                    default = item("gateway-https")
-                    self.assertNotIn("backendProtocol", default["gateway"])
-                    self.assertNotIn("path", default["gateway"])
-                    self.assertEqual(default["gateway"]["parentRefs"], [{"name": "review-gateway"}])
-                    http = item("gateway-http")
-                    self.assertEqual(http["service"]["https"], default["service"]["https"])
-                    self.assertEqual(http["service"]["http"]["port"], 18080)
-                    self.assertNotIn("backendTLS", http["gateway"])
-                    for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
-                        self.assertEqual(http[probe], item("existing-secret")[probe])
-                    self.assertEqual(item("gateway-ingress-migration")["ingress"], item("ingress")["ingress"])
-                    values = by_name["gateway-multiple-instances"].values
-                    child = values[chart] if target == "ecco-sp" else values
-                    instances = child["instance"]
-                    self.assertEqual(len(instances), 4)
-                    self.assertEqual(len({i["gateway"]["hostnames"][0] for i in instances}), 4)
-                    self.assertEqual(len(instances[0]["name"]), 63)
-                    self.assertEqual(len(by_name["gateway-multiple-instances"].release), 53)
-                    self.assertIn("fullnameOverride", instances[2])
-                    self.assertFalse(instances[3]["enabled"])
-                    for protocol in ("http", "https"):
-                        case = by_name[f"{chart}-reject-gateway-missing-{protocol}-port"]
-                        self.assertFalse(case.schema_reject)
-                        self.assertIn(f"service\\.{protocol}\\.port", case.reject)
+                self.assertEqual(sum(case.schema_reject for case in cases), 22)
+                self.assertEqual(sum("-reject-gateway-" in case.name for case in cases), 24)
+
+                def item(name):
+                    return by_name[name].values["instance"][0]
+
+                default = item("gateway-https")
+                self.assertNotIn("backendProtocol", default["gateway"])
+                self.assertNotIn("path", default["gateway"])
+                self.assertEqual(default["gateway"]["parentRefs"], [{"name": "review-gateway"}])
+                http = item("gateway-http")
+                self.assertEqual(http["service"]["https"], default["service"]["https"])
+                self.assertEqual(http["service"]["http"]["port"], 18080)
+                self.assertNotIn("backendTLS", http["gateway"])
+                for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
+                    self.assertEqual(http[probe], item("existing-secret")[probe])
+                self.assertEqual(item("gateway-ingress-migration")["ingress"], item("ingress")["ingress"])
+                instances = by_name["gateway-multiple-instances"].values["instance"]
+                self.assertEqual(len(instances), 4)
+                self.assertEqual(len({i["gateway"]["hostnames"][0] for i in instances}), 4)
+                self.assertEqual(len(instances[0]["name"]), 63)
+                self.assertEqual(len(by_name["gateway-multiple-instances"].release), 53)
+                self.assertIn("fullnameOverride", instances[2])
+                self.assertFalse(instances[3]["enabled"])
+                for protocol in ("http", "https"):
+                    case = by_name[f"{chart}-reject-gateway-missing-{protocol}-port"]
+                    self.assertFalse(case.schema_reject)
+                    self.assertIn(f"service\\.{protocol}\\.port", case.reject)
                 for case in cases:
                     if case.schema_reject:
                         self.assertIn("-reject-gateway-", case.name)
@@ -323,6 +322,13 @@ class GatewayManifestTests(unittest.TestCase):
 
 
 class GatewaySchemaTests(unittest.TestCase):
+    def test_source_pins_are_complete_sha256(self):
+        self.assertEqual(set(schemas.SOURCES), {"HTTPRoute", "BackendTLSPolicy"})
+        for kind, (_, digest) in schemas.SOURCES.items():
+            with self.subTest(kind=kind):
+                self.assertEqual(len(digest), 64)
+                self.assertRegex(digest, r"\A[0-9a-f]{64}\Z")
+
     def test_structural_conversion_openness_literals_nullable_and_bounds(self):
         source = {"type": "object", "description": "drop", "properties": {
             "closed": {"type": "object", "properties": {"description": {"type": "string"}}},
@@ -379,24 +385,29 @@ class GatewaySchemaTests(unittest.TestCase):
                 schemas.schema_from_crd(yaml.safe_dump(crd), "HTTPRoute")
 
     def test_download_checksum_timeout_https_and_failure(self):
-        source = sample_crd()
-        response = MagicMock()
-        response.__enter__.return_value = response
-        response.geturl.return_value = schemas.BASE_URL + "/test.yaml"
-        response.read.return_value = source
-        with patch.object(schemas, "urlopen", return_value=response) as download:
-            with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
-                schemas.download_source("HTTPRoute")
-            with patch.dict(schemas.SOURCES, {"HTTPRoute": ("httproutes", sha256(source).hexdigest())}):
-                self.assertEqual(schemas.download_source("HTTPRoute"), source)
-                args, kwargs = download.call_args
-                self.assertEqual(args[0], schemas.BASE_URL + "/gateway.networking.k8s.io_httproutes.yaml")
-                self.assertEqual(kwargs["timeout"], 30)
-                self.assertEqual(kwargs["context"].verify_mode, ssl.CERT_REQUIRED)
-                self.assertTrue(kwargs["context"].check_hostname)
-                response.geturl.return_value = "http://example.invalid/test.yaml"
-                with self.assertRaisesRegex(ValueError, "HTTPS"):
-                    schemas.download_source("HTTPRoute")
+        for kind, (plural, _) in schemas.SOURCES.items():
+            source = sample_crd(kind)
+            response = MagicMock()
+            response.__enter__.return_value = response
+            response.geturl.return_value = schemas.BASE_URL + "/test.yaml"
+            response.read.return_value = source
+            with self.subTest(kind=kind), patch.object(schemas, "urlopen", return_value=response) as download:
+                with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
+                    schemas.download_source(kind)
+                with patch.dict(schemas.SOURCES, {kind: (plural, sha256(source).hexdigest())}):
+                    self.assertEqual(schemas.download_source(kind), source)
+                    args, kwargs = download.call_args
+                    self.assertEqual(args[0], f"{schemas.BASE_URL}/{schemas.GROUP}_{plural}.yaml")
+                    self.assertEqual(kwargs["timeout"], 30)
+                    self.assertEqual(kwargs["context"].verify_mode, ssl.CERT_REQUIRED)
+                    self.assertTrue(kwargs["context"].check_hostname)
+                    response.read.return_value = source + b"\n"
+                    with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
+                        schemas.download_source(kind)
+                    response.read.return_value = source
+                    response.geturl.return_value = "http://example.invalid/test.yaml"
+                    with self.assertRaisesRegex(ValueError, "HTTPS"):
+                        schemas.download_source(kind)
 
     def test_lazy_cache_per_kind_and_work_directory(self):
         with tempfile.TemporaryDirectory() as temporary, patch.object(schemas, "download_source", side_effect=sample_crd) as download:
