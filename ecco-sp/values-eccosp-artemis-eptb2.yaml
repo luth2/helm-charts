@@ -1,70 +1,81 @@
-# The commented parameters have default values but these defaults can be overridden when enabled
-# All available configuration parameters are described in values file values-eccosp-artemis-eptb1.yaml
-
-# config for eccosp-artemis
+# Umbrella-Beispiel: nur Artemis aktiv; andere Komponenten bleiben in values.yaml aus.
+# Vollstaendige Instanzliste aus charts/eccosp-artemis/values.yaml, keine Secret-Inhalte.
+# Secret vor Installation extern befuellen; Ports, TLS, ECP-Code und Benutzer abstimmen.
+# Nicht mit EPTB1 per -f stapeln: Helm ersetzt instance-Listen statt sie anzufuegen.
 eccosp-artemis:
   enabled: true
   instance:
-    - name: artemis-eptb2
-      image:
-        name: entsoe/eccosp-artemis
-        tag: 4.17.0
-#        pullPolicy: IfNotPresent
-      replicaCount: 1
-      resourcesK8s:
-        requests:
-          cpu: 500m
-          memory: 1Gi
-        limits:
-          cpu: 1000m
-          memory: 5Gi
-
-      storageData: 1Gi
-      storageLogs: 256Mi
-      sharedStorageSize: 100Mi
-      sharedStorageSizeJournal: 100Mi
-      sharedStorageClass: nfs-client
-      sharedStorageClassJournal: nfs-client
-      keepLogsAfterRestart: true
-      livenessProbe:
-        enabled: false
-      readinessProbe:
-        enabled: true
-      useSharedStorageForConfiguration: true
-      useSharedStorageForJournal: true
-      prometheusEnabled: true
-
-      artemisKeystoreLocation: /opt/eccosp-artemis/etc/keystore.jks
-      artemisKeystorePassword: password
-
-      service:
-        type: LoadBalancer
-        https:
-          port: 8161
-        amqps:
-          port: 5672
-      ingress:
-        enabled: false
-      brokerXml:
-        default:
-          ecpComponentCode: artemis-eptb2
-
-        addressSettings:
-          defaultConfigurationEnabled: true
-      env:
-        resourcesJvm:
-          xms: 128M
-          xmx: 4G
-
-      artemisUsers:
-        - login: endpoint
-          password: password
-        - login: toolbox
-          password: password
-
-
-global:
-  storage:
-    class: standard
-  imagePullSecrets:
-    - name: regcred
+  - name: artemis-eptb2
+    enabled: true
+    existingSecret: eccosp-artemis-eptb2-config
+    secretRevision: '1'
+    checksumConfig: true
+    image:
+      name: entsoe/eccosp-artemis
+      tag: '4.17.0'
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    securityContext:
+      runAsUser: 2030
+      runAsGroup: 2030
+      fsGroup: 2030
+      fsGroupChangePolicy: OnRootMismatch
+    resourcesK8s:
+      requests:
+        cpu: 500m
+        ephemeralStorage: 256Mi
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 5Gi
+    storageData: 1Gi
+    storageLogs: 256Mi
+    keepLogsAfterRestart: false
+    useSharedStorageForConfiguration: false
+    useSharedStorageForJournal: false
+    sharedStorageClass: ''
+    sharedStorageClassJournal: ''
+    sharedStorageSize: 1Gi
+    sharedStorageSizeJournal: 1Gi
+    sharedStorageAccessMode: ReadWriteMany
+    startupProbe:
+      enabled: true
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 60
+      successThreshold: 1
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+    livenessProbe:
+      enabled: false
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+    service:
+      type: ClusterIP
+      https:
+        port: 8161
+      amqps:
+        port: 5672
+      annotations: {}
+    ingress:
+      enabled: false
+    brokerXml:
+      highAvailability:
+        acceptor:
+          port: 61616 # Pod/Headless-Port; aendert keine externe Vollkonfiguration.
+    artemisUsers:
+    - login: endpoint # Nur oeffentliches amq-Rollenmapping, Passwoerter extern.
+    - login: toolbox
+    env:
+      resourcesJvm:
+        xms: 128M
+        xmx: 4G

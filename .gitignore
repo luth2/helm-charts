@@ -1,0 +1,7 @@
+# Rebuilt from charts/ by Helm in CI; do not keep a second chart source.
+/ecco-sp/charts/*.tgz
+/ecco-sp/Chart.lock
+/.ci-artifacts/
+/.cr-release-packages/
+/.cr-index/
+/.github/scripts/__pycache__/

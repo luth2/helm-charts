@@ -1,0 +1,21 @@
+# ECCoSP Umbrella, Chart 5.0.0: ohne explizite Auswahl keine Komponenten.
+# Beispiele aktivieren jeweils genau einen Komponententyp. Instanzlisten werden ersetzt.
+# Jede aktivierte Instanz benoetigt existingSecret im Release-Namespace.
+# Keine privaten Vollkonfigurationen, Passwoerter oder DB-Warte-Images in Values.
+ecp-endpoint:
+  enabled: false
+ecp-directory:
+  enabled: false
+ecp-broker:
+  enabled: false
+eccosp-artemis:
+  enabled: false
+
+# Root-global gilt fuer alle aktivierten Subcharts; Beispiele ueberschreiben es nicht.
+global:
+  storage:
+    class: '' # Cluster-Default; '-' bedeutet explizit keine StorageClass.
+  imagePullSecrets: []
+  imageBusybox:
+    name: busybox
+    tag: '1.37.0'

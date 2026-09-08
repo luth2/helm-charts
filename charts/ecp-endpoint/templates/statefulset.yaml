@@ -1,302 +1,189 @@
-{{- range $i, $instance := .Values.instance }}
+{{- range $instance := .Values.instance }}
+{{- $ctx := dict "root" $ "instance" $instance -}}
+{{- $name := include "ecp-endpoint.instanceName" $ctx -}}
+{{- if or (not (hasKey $instance "enabled")) $instance.enabled }}
+{{- $props := $instance.ecpProperties | default dict -}}
+{{- $sc := mergeOverwrite (dict "runAsUser" 2000 "runAsGroup" 2000 "fsGroup" 2000 "fsGroupChangePolicy" "OnRootMismatch") (deepCopy ($instance.securityContext | default dict)) -}}
+{{- $mainSecurity := dict "runAsUser" $sc.runAsUser "runAsGroup" $sc.runAsGroup "runAsNonRoot" true "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL")) "seccompProfile" (dict "type" "RuntimeDefault") -}}
+{{- $rootSecurity := dict "runAsUser" 0 "runAsGroup" 0 "runAsNonRoot" false "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL") "add" (list "CHOWN" "FOWNER" "DAC_OVERRIDE")) "seccompProfile" (dict "type" "RuntimeDefault") -}}
+{{- $labels := mergeOverwrite (deepCopy (dig "template" "labels" (dict) $instance)) (dict "app" $name "app.kubernetes.io/instance" $.Release.Name) -}}
+{{- $annotations := deepCopy (dig "template" "annotations" (dict) $instance) -}}
+{{- $_ := set $annotations "existing-secret-revision" (default "" $instance.secretRevision) -}}
+{{- if dig "checksumConfig" true $instance -}}{{- $_ := set $annotations "checksum/config" (include "ecp-endpoint.publicConfig" $ctx | sha256sum) -}}{{- end -}}
+{{- $files := dict "ecp.properties" "/etc/ecp-endpoint/ecp.properties" "ecp-users.properties" "/etc/ecp-endpoint/ecp-users.properties" "ecp-password.properties" "/etc/ecp-endpoint/ecp-password.properties" "users.properties" "/etc/ecp-endpoint/users.properties" "groups.properties" "/etc/ecp-endpoint/groups.properties" "ecp-logback.xml" "/etc/ecp-endpoint/ecp-logback.xml" "server.xml" "/usr/share/ecp-endpoint/conf/server.xml" "env.conf" "/etc/systemd/system/ecp-endpoint.service.d/env.conf" "setenv.sh" "/usr/share/ecp-endpoint/bin/setenv.sh" -}}
+{{- $secretKeys := list "ecp.properties" "ecp-users.properties" "ecp-password.properties" "server.xml" "users.properties" -}}
+{{- if $instance.sessionReplication -}}{{- $_ := set $files "context.xml" "/usr/share/ecp-endpoint/conf/context.xml" -}}{{- end -}}
+{{- with $instance.jmxRemoteProperties -}}
+{{- $_ := set $files "jmxremote.properties" "/etc/ecp-endpoint/jmxremote.properties" -}}
+{{- $_ := set $files "jmxremote.access" (default "/etc/ecp-endpoint/jmxremote.access" .comSunManagementJmxRemoteAccessFile) -}}
+{{- $_ := set $files "jmxremote.password" (default "/etc/ecp-endpoint/jmxremote.password" .comSunManagementJmxRemotePasswordFile) -}}
+{{- $_ := set $files "jmxremote.ssl" (default "/etc/ecp-endpoint/jmxremote.ssl" .comSunManagementJmxRemoteSslConfigFile) -}}
+{{- $secretKeys = concat $secretKeys (list "jmxremote.password" "jmxremote.ssl") -}}
+{{- end }}
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
+  name: {{ $name }}
   labels:
-    app: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
 spec:
-  serviceName: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
-  replicas: {{ $instance.replicaCount | default "1"}}
+  serviceName: {{ $name }}-headless-svc
+  replicas: {{ dig "replicaCount" 1 $instance }}
   selector:
     matchLabels:
-      app: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
+      app: {{ $name }}
+      app.kubernetes.io/instance: {{ $.Release.Name | quote }}
   template:
     metadata:
-      annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configMap.yaml") (dict "Capabilities" $.Capabilities "Chart" $.Chart "Files" $.Files "Release" $.Release "Template" $.Template "Values" (dict "instance" (list $instance))) | sha256sum }}
-        {{- if $instance.template }}
-          {{- range $i, $item := $instance.template.annotations }}
-          {{- toYaml $item | nindent 8 }}
-          {{- end }}
-        {{- end }}
-      labels:
-        app: {{$.Release.Namespace}}-{{$.Chart.Name}}-{{$instance.name}}
-        {{- if $instance.template }}
-          {{- range $i, $item := $instance.template.labels }}
-          {{- toYaml $item | nindent 8 }}
-          {{- end }}
-        {{- end }}
+      labels: {{ toYaml $labels | nindent 8 }}
+      annotations: {{ toYaml $annotations | nindent 8 }}
     spec:
-    {{- with $.Values.global.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-    {{- end }}
-    {{- if $instance.affinity }}
-      affinity:
-        {{- toYaml $instance.affinity | nindent 8 }}
-    {{- end }}
-
+      {{- with (dig "global" "imagePullSecrets" (list) (merge (dict) $.Values)) }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $instance.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $instance.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $instance.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
-        fsGroup: {{ ($instance.securityContext).fsGroup | default "2000" }}
-        {{- if ($instance.securityContext).fsGroupChangePolicy }}
-        fsGroupChangePolicy: {{ ($instance.securityContext).fsGroupChangePolicy | default "OnRootMismatch" | quote }}
-        {{- end }}
-
+        fsGroup: {{ $sc.fsGroup }}
+        fsGroupChangePolicy: {{ $sc.fsGroupChangePolicy }}
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
-        - name: ensure-persistent-volume-sync-with-image-data
-          image: "{{$instance.image.name}}:{{$instance.image.tag}}"
-          imagePullPolicy: IfNotPresent
-          command: ["/bin/sh","-c"]
+        # Root is limited to copying image seed data and repairing PVC ownership.
+        # No projected configuration is mounted into either root init container.
+        - name: seed-data
+          image: {{ include "ecp-endpoint.image" $instance.image | quote }}
+          imagePullPolicy: {{ default "IfNotPresent" $instance.image.pullPolicy }}
+          securityContext: {{ toYaml $rootSecurity | nindent 12 }}
+          command: ["/bin/sh", "-ec"]
           args:
-            - cp -Rn /var/lib/ecp-endpoint/* /tmp/ecp-endpoint-dir/
+            - |
+              set -eu
+              cp -Rn /var/lib/ecp-endpoint/. /seed/
           volumeMounts:
-          - name: data
-            mountPath: "/tmp/ecp-endpoint-dir"
-        - name: pgsql-data-permission-fix-and-livenessprobe-script
-          image: "{{ $.Values.global.imageBusybox.name }}"
-          imagePullPolicy: IfNotPresent
-          command: ["/bin/sh","-c"]
-          args:
-            - /bin/chmod 777 -R /data;
-              /bin/chmod 400 -R /config;
-              {{- if $instance.keepLogsAfterRestart}}
-              /bin/chmod 777 -R /logs;
-              {{- end }}
-          volumeMounts:
-          - name: data
-            mountPath: /data
-          {{- if $instance.keepLogsAfterRestart}}
-          - name: logs
-            mountPath: /logs
-          {{- end }}
-
-         {{- if $instance.readinessProbe}}
-         {{- if $instance.ecpProperties.springDatasourceDriverClassName }}
-         {{- if or (eq $instance.ecpProperties.springDatasourceDriverClassName "org.mariadb.jdbc.Driver") (eq $instance.ecpProperties.springDatasourceDriverClassName "com.mysql.jdbc.Driver") }}
-        - name: mysql-readiness-check
-          image: "{{ $.Values.global.imageMysqlClient.name }}"
-          imagePullPolicy: IfNotPresent
-          command: [ "/bin/sh","-c" ]
-          args:
-            - dbs=$(echo {{$instance.ecpProperties.ecpDBHostname}} | tr "," "\n");
-              while true; do
-              for db in $dbs; do
-              mysql -h $db -u {{$instance.ecpProperties.ecpDBUsername}} -p{{$instance.ecpProperties.ecpDBPassword}} -D {{$instance.ecpProperties.ecpDBName}} -e "SHOW DATABASES LIKE '{{$instance.ecpProperties.ecpDBName}}'";
-              if [ $? -eq 0 ]; then break 2; fi
-              done;
-              echo waiting for database;
-              sleep 2;
-              done
-         {{- end }}
-
-         {{- if eq $instance.ecpProperties.springDatasourceDriverClassName "com.microsoft.sqlserver.jdbc.SQLServerDriver"}}
-        - name: mssql-readiness-check
-          image: "{{ $.Values.global.imageMsSqlClient.name }}"
-          imagePullPolicy: IfNotPresent
-          command: [ "/bin/bash","-c" ]
-          args: 
-            - dbs=$(echo {{$instance.ecpProperties.ecpDBHostname}} | tr "," "\n");
-              while true; do
-              for db in $dbs; do
-              export DB_STATE=$(/opt/mssql-tools/bin/sqlcmd -S $db -U {{$instance.ecpProperties.ecpDBUsername}} -P {{$instance.ecpProperties.ecpDBPassword}} -Q "IF DB_ID('{{$instance.ecpProperties.ecpDBName}}') IS NOT NULL print 'OK'");
-              if [ "$DB_STATE" = 'OK' ]; then break 2; fi
-              done;
-              echo waiting for database;
-              sleep 2;
-              done
-         {{- end }}
-
-         
-         {{- if eq $instance.ecpProperties.springDatasourceDriverClassName "org.postgresql.Driver"}}
-        - name: postgres-readiness-check
-          image: "{{ $.Values.global.imagePostgresClient.name }}"
-          imagePullPolicy: IfNotPresent
-          command: [ "/bin/bash","-c" ]
-          args: 
-            - export DB_PORT=$(echo "{{$instance.ecpProperties.ecpDBUrl}}" | awk '{n=split($0,x,":"); print x[n]}' | awk -F "/" '{print $1}' );
-              dbs=$(echo {{$instance.ecpProperties.ecpDBHostname}} | tr "," "\n");
-              while true; do
-              for db in $dbs; do
-              export DB_KNOWN=$(PGPASSWORD={{$instance.ecpProperties.ecpDBPassword}} psql -h $db -p $DB_PORT -U {{$instance.ecpProperties.ecpDBUsername}} -lqt | cut -d \| -f 1 | grep -w {{$instance.ecpProperties.ecpDBName}} | wc -l);
-              if [ $DB_KNOWN -eq 1 ]; then break 2; fi
-              done;
-              echo waiting for database;
-              sleep 2;
-              done
-         {{- end }}
-
-         {{- if eq $instance.ecpProperties.springDatasourceDriverClassName "oracle.jdbc.OracleDriver"}}
-        - name: oracle-readiness-check
-          image: "{{ $.Values.global.imageOracleClient.name }}"
-          imagePullPolicy: IfNotPresent
-          command: [ "/bin/bash","-c" ]
-          args: 
-            - export PDB=$(echo {{$instance.ecpProperties.ecpDBUrl}} | awk '{n=split($0,x,"/"); print x[n]}');
-              echo "SELECT USER FROM DUAL WHERE USER = '{{upper $instance.ecpProperties.ecpDBUsername}}';" > /select.sql;
-              dbs=$(echo {{$instance.ecpProperties.ecpDBHostname}} | tr "," "\n");
-              while true; do
-              for db in $dbs; do
-              export CONN_STR="{{$instance.ecpProperties.ecpDBUsername}}/{{$instance.ecpProperties.ecpDBPassword}}@//$db/$PDB"
-              export DB_KNOWN=$(sqlplus $CONN_STR < /select.sql | grep -wx "{{upper $instance.ecpProperties.ecpDBUsername }}" | wc -l);
-              if [ $DB_KNOWN -eq 1 ]; then break 2; fi
-              done;
-              echo waiting for database;
-              sleep 2;
-              done
-         {{- end }}
-
-         {{- end }}
-         {{- end }}
-      {{- range $i, $item := $instance.initContainers }}
-        - {{- toYaml $item | nindent 10 }}
-      {{- end }}
-
-      containers:
-        - name: {{$.Release.Name}}
-          image: "{{ $instance.image.name }}:{{ $instance.image.tag }}"
-          {{- if $instance.command }}
-          command: {{- toYaml $instance.command | nindent 10 }}
-          args: {{- toYaml $instance.args | nindent 10 }}
-          {{- end }}
-          {{- if $instance.image.registry }}
-          registry: {{ $instance.image.registry }}
-          {{- end }}
-          imagePullPolicy: {{ $instance.image.pullPolicy | default "IfNotPresent" }}
-          {{- if $instance.livenessProbe}}
-          # Liveness probes rules
-          livenessProbe:
-            httpGet:
-              path: {{ $instance.ecpProperties.livenessContextPath | default "/ECP_MODULE/actuator/health" }}
-              port: {{ (($instance.service).https).port | default (($instance.service).http).port }}
-              scheme: {{ if (($instance.service).https).port -}}HTTPS{{- else -}}HTTP{{- end }}
-              httpHeaders:
-              - name: Authorization
-                value: {{ $firstUser := index $instance.ecpUsersProperties.ecpEndpointUsers 0 }} {{ printf "Basic %s" (b64enc (printf "%s:%s" $firstUser.login $firstUser.password )) }} 
-            initialDelaySeconds: 120
-            periodSeconds: 60
-         {{- end }}
-          securityContext:
-            runAsUser: {{ ($instance.securityContext).runAsUser | default "2000" }}
-            runAsGroup: {{ ($instance.securityContext).runAsGroup | default "2000" }}
-
-          {{- if $instance.service }}
-          ports:
-            {{- if $instance.service.http }}
-            - name: http
-              containerPort: {{$instance.service.http.port}}
-              protocol: TCP
-            {{- end}}
-            {{- if $instance.service.https }}
-            - name: https
-              containerPort: {{ $instance.service.https.port }}
-              protocol: TCP
-            {{- end}}
-          {{- end }}
-          {{ if or $instance.env $instance.sessionReplication -}}
-            env:
-            {{- if $instance.sessionReplication }}
-              - name: DNS_MEMBERSHIP_SERVICE_NAME
-                value: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-              {{- end }}
-              {{- range $i, $item := $instance.env }}
-              - {{- toYaml $item | nindent 14 }}
-              {{- end }}
-          {{ end -}}
-          volumeMounts:
-            - name: config
-              subPath: ecp.properties
-              mountPath: /etc/ecp-endpoint/ecp.properties
-            - name: config
-              subPath: ecp-users.properties
-              mountPath: /etc/ecp-endpoint/ecp-users.properties
-            {{- if $instance.jmxRemoteProperties }}
-            - name: config
-              subPath: jmxremote.properties
-              mountPath: /etc/ecp-endpoint/jmxremote.properties
-            - name: config
-              subPath: jmxremote.password
-              mountPath: {{ $instance.jmxRemoteProperties.comSunManagementJmxRemotePasswordFile | default "/etc/ecp-endpoint/jmxremote.password" }}
-            - name: config
-              subPath: jmxremote.access
-              mountPath: {{ $instance.jmxRemoteProperties.comSunManagementJmxRemoteAccessFile | default "/etc/ecp-endpoint/jmxremote.access" }}
-            - name: config
-              subPath: jmxremote.ssl
-              mountPath: {{ $instance.jmxRemoteProperties.comSunManagementJmxRemoteSslConfigFile | default "/etc/ecp-endpoint/jmxremote.ssl" }}
-              {{- end }}
             - name: data
-              mountPath: {{ $instance.ecpProperties.dataDirectory | default "/var/lib/ecp-endpoint" }}
-            {{- if $instance.keepLogsAfterRestart}}
+              mountPath: /seed
+        - name: volume-permissions
+          image: {{ include "ecp-endpoint.busybox" $ | quote }}
+          securityContext: {{ toYaml $rootSecurity | nindent 12 }}
+          command: ["/bin/sh", "-ec"]
+          env:
+            - name: APP_OWNER
+              value: {{ printf "%v:%v" $sc.runAsUser $sc.runAsGroup | quote }}
+          args:
+            - |
+              set -eu
+              chown -R "$APP_OWNER" /data
+              chmod -R u+rwX,g+rX,o-rwx /data
+              {{- if $instance.keepLogsAfterRestart }}
+              chown -R "$APP_OWNER" /logs
+              chmod -R u+rwX,g+rX,o-rwx /logs
+              {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            {{- if $instance.keepLogsAfterRestart }}
             - name: logs
-              mountPath: {{ $instance.ecpProperties.loggingFilePath | default "/var/log/ecp-endpoint" }}
-             {{- end }}
-            - name: config
-              subPath: ecp-logback.xml
-              mountPath: /etc/ecp-endpoint/ecp-logback.xml
-            - name: config
-              subPath: server.xml
-              mountPath: /usr/share/ecp-endpoint/conf/server.xml
-            - name: config
-              subPath: ecp-password.properties
-              mountPath: /etc/ecp-endpoint/ecp-password.properties
-            - name: config
-              subPath: env.conf
-              mountPath: /etc/systemd/system/ecp-endpoint.service.d/env.conf
-            - name: config
-              subPath: setenv.sh
-              mountPath: /usr/share/ecp-endpoint/bin/setenv.sh
-            - name: config
-              subPath: users.properties
-              mountPath: /etc/ecp-endpoint/users.properties
-            - name: config
-              subPath: groups.properties
-              mountPath: /etc/ecp-endpoint/groups.properties
-            {{- range $i, $item := $instance.volumeMounts }}
-            - {{- toYaml $item | nindent 14 }}
+              mountPath: /logs
             {{- end }}
-      {{- if $instance.resourcesK8s}}
-          resources:
-            requests:
-              cpu: {{$instance.resourcesK8s.requests.cpu}} # Minimum CPU allocation for pod
-              ephemeral-storage: {{$instance.resourcesK8s.requests.ephemeralStorage | default "256Mi" }} # Minimum ephemeral storage allocation for pod
-              memory: {{$instance.resourcesK8s.requests.memory}} # Minimum memory allocation for pod
-            limits:
-              cpu: {{$instance.resourcesK8s.limits.cpu}} # Maximum CPU limit for pod
-              memory: {{$instance.resourcesK8s.limits.memory}} # Maximum memory limit for pod
+        {{- range $extra := $instance.initContainers }}
+        {{- $extra = deepCopy $extra }}
+        {{- $_ := set $extra "securityContext" $mainSecurity }}
+        - {{ toYaml $extra | nindent 10 }}
+        {{- end }}
+      containers:
+        - name: ecp-endpoint
+          image: {{ include "ecp-endpoint.image" $instance.image | quote }}
+          imagePullPolicy: {{ default "IfNotPresent" $instance.image.pullPolicy }}
+          securityContext: {{ toYaml $mainSecurity | nindent 12 }}
+          {{- with $instance.command }}
+          command: {{ toYaml . | nindent 12 }}
           {{- end }}
-      {{- range $i, $item := $instance.containers }}
-        - {{- toYaml $item | nindent 10 }}
-      {{- end }}
-
+          {{- with $instance.args }}
+          args: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "ecp-endpoint.probes" (dict "instance" $instance "port" (ternary "https" "http" (hasKey $instance.service "https"))) | nindent 10 }}
+          ports:
+            {{- range $port := list "http" "https" "amqp" "amqps" }}
+            {{- with get $instance.service $port }}
+            - name: {{ $port }}
+              containerPort: {{ .port }}
+              protocol: TCP
+            {{- end }}
+            {{- end }}
+          {{- if or $instance.env $instance.sessionReplication }}
+          env:
+            {{- if $instance.sessionReplication }}
+            - name: DNS_MEMBERSHIP_SERVICE_NAME
+              value: {{ $name }}-headless-svc
+            {{- end }}
+            {{- with $instance.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            {{- range $file, $path := $files }}
+            - name: config
+              subPath: {{ $file }}
+              mountPath: {{ $path | quote }}
+              readOnly: true
+            {{- end }}
+            - name: data
+              mountPath: {{ default "/var/lib/ecp-endpoint" $props.dataDirectory | quote }}
+            {{- if $instance.keepLogsAfterRestart }}
+            - name: logs
+              mountPath: {{ default "/var/log/ecp-endpoint" $props.loggingFilePath | quote }}
+            {{- end }}
+            {{- with $instance.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with $instance.resourcesK8s }}
+          {{- $resources := deepCopy . }}
+          {{- if hasKey ($resources.requests | default dict) "ephemeralStorage" }}
+          {{- $_ := set $resources.requests "ephemeral-storage" $resources.requests.ephemeralStorage }}
+          {{- $_ := unset $resources.requests "ephemeralStorage" }}
+          {{- end }}
+          resources: {{ toYaml $resources | nindent 12 }}
+          {{- end }}
+        {{- with $instance.containers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       volumes:
         - name: config
-          configMap:
-            name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-cm
-        {{- range $i, $item := $instance.volumes }}
-        - {{- toYaml $item | nindent 10 }}
+          projected:
+            defaultMode: 0440
+            sources:
+              - configMap:
+                  name: {{ $name }}-cm
+              - secret:
+                  name: {{ $instance.existingSecret | quote }}
+                  items:
+                    {{- range $key := $secretKeys }}
+                    - key: {{ $key }}
+                      path: {{ $key }}
+                    {{- end }}
+        {{- with $instance.volumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
-
   volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      storageClassName: {{ (($.Values.global).storage).class | default "standard" }}
-      resources:
-        requests:
-          storage: {{$instance.storageData | default "512Mi"}}
-  {{- if $instance.keepLogsAfterRestart}}
-  - metadata:
-      name: logs
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      storageClassName: {{ (($.Values.global).storage).class | default "standard" }}
-      resources:
-        requests:
-          storage: {{$instance.storageLogs | default "512Mi"}}
-   {{- end }}
-  {{- range $i, $item := $instance.volumeClaimTemplates }}
-  - {{- toYaml $item | nindent 4 }}
-  {{- end }}
----
-{{ end}}
+    {{- include "ecp-endpoint.claim" (dict "root" $ "name" "data" "size" (default "1Gi" $instance.storageData)) | nindent 4 }}
+    {{- if $instance.keepLogsAfterRestart }}
+    {{- include "ecp-endpoint.claim" (dict "root" $ "name" "logs" "size" (default "256Mi" $instance.storageLogs)) | nindent 4 }}
+    {{- end }}
+    {{- $claimNames := dict "data" true "config" true "logs" true }}
+    {{- range $claim := $instance.volumeClaimTemplates }}
+    {{- if hasKey $claimNames $claim.metadata.name }}{{ fail "duplicate/reserved volumeClaimTemplates name" }}{{- end }}
+    {{- $_ := set $claimNames $claim.metadata.name true }}
+    - {{ toYaml $claim | nindent 6 }}
+    {{- end }}
+{{- end }}
+{{- end }}

@@ -1,98 +1,76 @@
-# The commented parameters have default values but these defaults can be overridden when enabled
-# All available configuration parameters are described in values file values-ecp-endpoint-ep1.yaml
-
+# Umbrella-Beispiel: nur Endpoint aktiv; andere Komponenten bleiben in values.yaml aus.
+# Vollstaendige Instanzliste aus charts/ecp-endpoint/values.yaml. JMX bleibt aus.
+# Secret vor Installation extern befuellen; Ports, DB, TLS und Benutzer dort abstimmen.
+# EP2 -> platform-eccosp-artemis-artemis-eptb2-svc:5672 nur extern konfigurieren.
+# Nicht mit EP1 per -f stapeln: Helm ersetzt instance-Listen statt sie anzufuegen.
 ecp-endpoint:
   enabled: true
   instance:
-    - name: ep2
-      image:
-        name: entsoe/ecp-endpoint
-        tag: 4.17.0
-      replicaCount: 1
-      resourcesK8s:
-        requests:
-          cpu: 500m
-          memory: 1Gi
-        limits:
-          cpu: 1000m
-          memory: 1512Mi
-      storageData: 1Gi
-      storageLogs: 256Mi
-      keepLogsAfterRestart: true
-      livenessProbe:
-        enabled: false
-      readinessProbe:
-        enabled: true
-
-      service:
-        https:
-          port: 8443
-      ingress:
-        enabled: false
-#        apiVersion: networking.k8s.io/v1
-#        contextPath: / # context path for ingress, default value '/'
-#        host: ecp-endpoint.ep2.eccosp
-#        tls: # section for TLS definition for HTTPS connection to ingress
-#          secretName: tls-secret  # secret where TLS certificate is stored
-#        ingressClassName: nginx  # ingress class - use nginx
-#        annotations:
-#          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-#          nginx.ingress.kubernetes.io/ssl-passthrough: 'true'
-
-      ecpProperties:
-        springProfilesActive: ecp-nonha, console-logging
-        dataDirectory: /var/lib/ecp-endpoint
-        ecpKeystoreLocation: /var/lib/ecp-endpoint/keystore.jks
-        ecpKeystorePassword: password
-        ecpAuthKeystoreLocation: /var/lib/ecp-endpoint/authKeystore.jks
-        ecpAuthKeystorePassword: password
-
-        internalBrokerHost: eccosp-eccosp-artemis-artemis-eptb2-svc
-        internalBrokerAmqpPort: 5672
-        internalBrokerUseAuthentication: true
-        internalBrokerAuthUser: endpoint
-        internalBrokerAuthPassword: password
-        internalBrokerKeystoreLocation: ${dataDirectory}/authKeystore.jks
-        internalBrokerKeystorePassword: password
-        internalBrokerKeystoreAuthAlias: ecp_module_auth
-        internalBrokerUrls: amqps://eccosp-eccosp-artemis-artemis-eptb2-svc:5672
-
-        loggingFileName: /var/log/ecp-endpoint/ecp.log
-        loggingFilePath: /var/log/ecp-endpoint
-        loggingConfig: /etc/ecp-endpoint/ecp-logback.xml
-        loggingLevelOrgApacheQpid: WARN
-
-        springJmxEnabled: false
-
-        ecpDBKeystorePassword: password
-
-        ecpEndpointAmqpApiEnabled: true
-        ecpEndpointAmqpApiSendHandlerEnabled: true
-        sendHandlerBeanName: amqpApiSendHandler
-        sendHandlertypeName: "*"
-
-        ecpNatEnabled: false
-
-        ecpSecurityProxyEnabled: false
-        ecpCsrfSecret: P9CkNis9r5Pn00RFZwN9oZgi
-
-      envConf:
-        resourcesJvm:
-          xms: 128M
-          xmx: 1G
-
-      ecpUsersProperties:
-        ecpEndpointUsers:
-          - login: admin
-            password: password
-            role: admin
-          - login: tester
-            password: passwordtester
-            role: user
-
-# global config
-global:
-  storage:
-    class: standard
-  imagePullSecrets:
-    - name: regcred
+  - name: ep2
+    enabled: true
+    existingSecret: ecp-endpoint-ep2-config
+    secretRevision: '1'
+    checksumConfig: true
+    image:
+      name: entsoe/ecp-endpoint
+      tag: '4.17.0'
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    sessionReplication: false
+    securityContext:
+      runAsUser: 2000
+      runAsGroup: 2000
+      fsGroup: 2000
+      fsGroupChangePolicy: OnRootMismatch
+    resourcesK8s:
+      requests:
+        cpu: 500m
+        ephemeralStorage: 256Mi
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 1512Mi
+    storageData: 1Gi
+    storageLogs: 256Mi
+    keepLogsAfterRestart: true
+    startupProbe:
+      enabled: true
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 60
+      successThreshold: 1
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+    livenessProbe:
+      enabled: false
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+    service:
+      type: ClusterIP
+      https:
+        port: 8443
+      annotations: {}
+    ingress:
+      enabled: false
+    ecpProperties:
+      # Pfade/Profile auch extern setzen; Values ersetzen keine Vollkonfiguration.
+      springProfilesActive: 'ecp-nonha, console-logging'
+      dataDirectory: /var/lib/ecp-endpoint
+      loggingFilePath: /var/log/ecp-endpoint
+      loggingFileName: /var/log/ecp-endpoint/ecp.log
+      loggingConfig: /etc/ecp-endpoint/ecp-logback.xml
+      internalBrokerAuthUser: endpoint # Nur oeffentliches Gruppenmapping.
+    envConf:
+      resourcesJvm:
+        xms: 128M
+        xmx: 1G
+      ecpLogFullStackTrace: false

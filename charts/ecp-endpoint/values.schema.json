@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ECP Endpoint values",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["instance"],
+  "properties": {
+    "enabled": {"type": "boolean"},
+    "global": {"$ref": "#/definitions/global"},
+    "instance": {
+      "type": "array", "minItems": 0,
+      "items": {
+        "type": "object", "additionalProperties": true, "required": ["name"],
+        "properties": {
+          "name": {"$ref": "#/definitions/name"},
+          "fullnameOverride": {"type": "string", "minLength": 1, "maxLength": 45, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+          "enabled": {"type": "boolean"},
+          "existingSecret": {"type": "string"},
+          "secretRevision": {"type": "string"},
+          "checksumConfig": {"type": "boolean"},
+          "image": {"$ref": "#/definitions/image"},
+          "replicaCount": {"type": "integer", "minimum": 0},
+          "sessionReplication": {"type": "boolean"},
+          "keepLogsAfterRestart": {"type": "boolean"},
+          "storageData": {"$ref": "#/definitions/quantity"},
+          "storageLogs": {"$ref": "#/definitions/quantity"},
+          "securityContext": {"$ref": "#/definitions/security"},
+          "startupProbe": {"$ref": "#/definitions/restartProbe"},
+          "readinessProbe": {"$ref": "#/definitions/probe"},
+          "livenessProbe": {"$ref": "#/definitions/restartProbe"},
+          "databaseWait": {"type": "object", "properties": {"enabled": {"const": false}}, "additionalProperties": true},
+          "service": {"$ref": "#/definitions/service"},
+          "ingress": {"$ref": "#/definitions/ingress"},
+          "template": {"$ref": "#/definitions/template"},
+          "ecpProperties": {"type": "object", "additionalProperties": true},
+          "env": {"type": "array", "items": {"type": "object"}},
+          "command": {"type": "array", "items": {"type": "string"}},
+          "args": {"type": "array", "items": {"type": "string"}},
+          "initContainers": {"type": "array", "items": {"type": "object"}},
+          "containers": {"type": "array", "items": {"type": "object"}},
+          "volumes": {"type": "array", "items": {"type": "object"}},
+          "volumeMounts": {"type": "array", "items": {"type": "object"}},
+          "volumeClaimTemplates": {"type": "array", "items": {"$ref": "#/definitions/claim"}}
+        },
+        "allOf": [{
+          "if": {"not": {"required": ["enabled"], "properties": {"enabled": {"const": false}}}},
+          "then": {
+            "required": ["existingSecret", "image", "service"],
+            "properties": {"existingSecret": {"$ref": "#/definitions/secretName"}}
+          }
+        }]
+      }
+    }
+  },
+  "definitions": {
+    "name": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+    "secretName": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"},
+    "quantity": {"type": "string", "pattern": "^[1-9][0-9]*(\\.[0-9]+)?([EPTGMK]i?|m|k)?$"},
+    "stringMap": {"type": "object", "additionalProperties": {"type": "string"}},
+    "image": {
+      "type": "object", "additionalProperties": true, "required": ["name"],
+      "not": {"required": ["registry"]},
+      "anyOf": [{"required": ["tag"]}, {"required": ["digest"]}],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "pattern": "^[^\\s@]+$"},
+        "tag": {"type": "string", "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "global": {
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "storage": {"type": "object", "properties": {"class": {"type": "string"}}, "additionalProperties": true},
+        "imageBusybox": {"type": "object", "properties": {"name": {"type": "string", "minLength": 1}, "tag": {"type": "string", "minLength": 1}}, "additionalProperties": true},
+        "imagePullSecrets": {"type": "array", "items": {"type": "object", "required": ["name"], "properties": {"name": {"$ref": "#/definitions/secretName"}}}}
+      }
+    },
+    "security": {
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "runAsUser": {"type": "integer", "minimum": 1},
+        "runAsGroup": {"type": "integer", "minimum": 1},
+        "fsGroup": {"type": "integer", "minimum": 1},
+        "fsGroupChangePolicy": {"enum": ["Always", "OnRootMismatch"]}
+      }
+    },
+    "probe": {
+      "description": "TCP reachability, not authenticated functional or database health.",
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "initialDelaySeconds": {"type": "integer", "minimum": 0},
+        "periodSeconds": {"type": "integer", "minimum": 1},
+        "timeoutSeconds": {"type": "integer", "minimum": 1},
+        "failureThreshold": {"type": "integer", "minimum": 1},
+        "successThreshold": {"type": "integer", "minimum": 1}
+      }
+    },
+    "restartProbe": {"allOf": [{"$ref": "#/definitions/probe"}, {"properties": {"successThreshold": {"const": 1}}}]},
+    "port": {
+      "type": "object", "additionalProperties": true, "required": ["port"],
+      "properties": {
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "nodePort": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "service": {
+      "type": "object", "additionalProperties": true,
+      "anyOf": [{"required": ["http"]}, {"required": ["https"]}],
+      "properties": {
+        "type": {"enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+        "http": {"$ref": "#/definitions/port"}, "https": {"$ref": "#/definitions/port"},
+        "amqp": {"$ref": "#/definitions/port"}, "amqps": {"$ref": "#/definitions/port"},
+        "annotations": {"type": ["object", "null"], "additionalProperties": {"type": "string"}},
+        "loadBalancerIP": {"type": "string"}
+      }
+    },
+    "ingress": {
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "apiVersion": {"const": "networking.k8s.io/v1"},
+        "ingressClassName": {"type": "string"},
+        "host": {"type": "string", "minLength": 1, "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"},
+        "contextPath": {"type": "string", "pattern": "^/"},
+        "annotations": {"$ref": "#/definitions/stringMap"},
+        "tls": {"type": "object", "required": ["secretName"], "properties": {"secretName": {"$ref": "#/definitions/secretName"}}, "additionalProperties": true}
+      },
+      "allOf": [{"if": {"required": ["enabled"], "properties": {"enabled": {"const": true}}}, "then": {"required": ["host"]}}]
+    },
+    "template": {"type": "object", "additionalProperties": true, "properties": {"labels": {"$ref": "#/definitions/stringMap"}, "annotations": {"$ref": "#/definitions/stringMap"}}},
+    "claim": {
+      "type": "object", "additionalProperties": true, "required": ["metadata", "spec"],
+      "properties": {
+        "metadata": {"type": "object", "required": ["name"], "properties": {"name": {"$ref": "#/definitions/name"}}, "additionalProperties": true},
+        "spec": {"type": "object", "required": ["accessModes", "resources"], "additionalProperties": true, "properties": {"accessModes": {"type": "array", "minItems": 1, "items": {"enum": ["ReadWriteOnce", "ReadWriteMany", "ReadOnlyMany", "ReadWriteOncePod"]}}, "storageClassName": {"type": "string"}, "resources": {"type": "object"}}}
+      }
+    }
+  }
+}

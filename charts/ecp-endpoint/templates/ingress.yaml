@@ -1,40 +1,42 @@
-{{- range $i, $instance := .Values.instance }}
-  {{- if $instance.ingress.enabled -}}
-apiVersion: {{ $instance.ingress.apiVersion | default "networking.k8s.io/v1" }}
+{{- range $instance := .Values.instance }}
+{{- $name := include "ecp-endpoint.instanceName" (dict "root" $ "instance" $instance) -}}
+{{- if and (or (not (hasKey $instance "enabled")) $instance.enabled) (dig "ingress" "enabled" false $instance) }}
+{{- $ingress := $instance.ingress -}}
+{{- $https := hasKey $instance.service "https" -}}
+{{- $annotations := deepCopy ($ingress.annotations | default dict) -}}
+{{- if and $https (eq (default "" $ingress.ingressClassName) "nginx") (not (hasKey $annotations "nginx.ingress.kubernetes.io/backend-protocol")) -}}
+{{- $_ := set $annotations "nginx.ingress.kubernetes.io/backend-protocol" "HTTPS" -}}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-ingress
+  name: {{ $name }}-ingress
   labels:
-    backup.component.name: {{ $.Release.Name }}
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-    app-svc: {{ $.Release.Service }}
-{{- with $instance.ingress.annotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-{{- end }}
-spec:
-{{- if $instance.ingress.tls }}
-  tls:
-    - hosts:
-        - {{$instance.ingress.host}}
-      secretName: {{ $instance.ingress.tls.secretName }}
-{{- end }}
-  rules:
-  - host: {{$instance.ingress.host}}
-    http:
-      paths:
-      - backend:
-          {{- if eq ($instance.ingress.apiVersion | default "networking.k8s.io/v1") "networking.k8s.io/v1" }}
-          service:
-            name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
-            port:
-              number: {{ ($instance.service.http).port | default ($instance.service.https).port }}
-        pathType: Prefix
-          {{- else }}
-          serviceName: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
-          servicePort: {{ ($instance.service.http).port | default ($instance.service.https).port }}
-          {{- end }}
-        path: {{ $instance.ingress.contextPath | default "/" }}
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+  {{- with $annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
   {{- end }}
----
-{{ end }}
+spec:
+  {{- with $ingress.ingressClassName }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with $ingress.tls }}
+  tls:
+    - hosts: [{{ $ingress.host | quote }}]
+      secretName: {{ required "ingress.tls.secretName is required" .secretName | quote }}
+  {{- end }}
+  rules:
+    - host: {{ $ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ default "/" $ingress.contextPath | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}-svc
+                port:
+                  name: {{ ternary "https" "http" $https }}
+{{- end }}
+{{- end }}

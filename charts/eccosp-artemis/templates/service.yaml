@@ -1,74 +1,50 @@
-{{- range $i, $instance := .Values.instance }}
-{{- if or $instance.enabled (not (hasKey $instance "enabled")) }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
-  labels:
-    backup.component.name: {{ $.Release.Name }}
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-{{- with ($instance.service).annotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-{{- end }}
-spec:
-  type: {{ ($instance.service).type | default "ClusterIP" }}
-  ports:
-{{- if (($instance.service).http).port }}
-    - name: http
-      port: {{ $instance.service.http.port | default "8161" }}
-      protocol: TCP
-      {{- if $instance.service.http.nodePort }}
-      nodePort: {{ $instance.service.http.nodePort }}
-      {{- end }}
-{{- end }}
-{{- if (($instance.service).https).port }}
-    - name: https
-      port: {{ $instance.service.https.port | default "8162" }}
-      protocol: TCP
-      {{- if $instance.service.https.nodePort }}
-      nodePort: {{ $instance.service.https.nodePort }}
-      {{- end }}
-{{- end }}
-    - name: amqps
-      port: {{ (($instance.service).amqps).port | default "5671" }}
-      protocol: TCP
-      {{- if $instance.service.amqps.nodePort }}
-      nodePort: {{ $instance.service.amqps.nodePort }}
-      {{- end }}
-
-  selector:
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-{{- if ($instance.service).loadBalancerIP }}
-  loadBalancerIP: {{ $instance.service.loadBalancerIP }}
-{{- end }}
+{{- range $instance := .Values.instance }}
+{{- $name := include "eccosp-artemis.instanceName" (dict "root" $ "instance" $instance) -}}
+{{- if or (not (hasKey $instance "enabled")) $instance.enabled }}
+{{- $service := $instance.service | default dict -}}
+{{- $amqp := "amqps" -}}
+{{- $ports := pick $service "http" "https" -}}
+{{- $_ := set $ports $amqp (mergeOverwrite (dict "port" 5672) (deepCopy (get $service $amqp | default dict))) -}}
+{{- range $headless := list false true }}
+{{- $type := ternary "ClusterIP" (default "ClusterIP" $service.type) $headless }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-headless-svc
+  name: {{ $name }}-{{ ternary "headless-svc" "svc" $headless }}
   labels:
-    backup.component.name: {{ $.Release.Name }}
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-  annotations:
-    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
-{{- with ($instance.service).annotations }}
-    {{- toYaml . | nindent 4 }}
-{{- end }}
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+  {{- with $service.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-  type: ClusterIP
+  type: {{ $type }}
+  {{- if $headless }}
   clusterIP: None
   publishNotReadyAddresses: true
+  {{- else if and (eq $type "LoadBalancer") $service.loadBalancerIP }}
+  loadBalancerIP: {{ $service.loadBalancerIP | quote }}
+  {{- end }}
   selector:
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
   ports:
-    - protocol: TCP
-      port: 61616
-      targetPort: 61616
----
+    {{- range $port, $settings := $ports }}
+    - name: {{ $port }}
+      port: {{ $settings.port }}
+      targetPort: {{ $port }}
+      protocol: TCP
+      {{- if and (not $headless) (has $type (list "NodePort" "LoadBalancer")) $settings.nodePort }}
+      nodePort: {{ $settings.nodePort }}
+      {{- end }}
+    {{- end }}
+    {{- if $headless }}
+    - name: ha
+      port: {{ dig "brokerXml" "highAvailability" "acceptor" "port" 61616 $instance }}
+      targetPort: ha
+      protocol: TCP
+    {{- end }}
 {{- end }}
-{{- range $j, $item := $instance.services }}
-{{- toYaml $item | nindent 0 }}
----
 {{- end }}
-{{ end}}
+{{- end }}

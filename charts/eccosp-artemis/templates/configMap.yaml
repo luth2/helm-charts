@@ -1,9 +1,15 @@
+{{- define "eccosp-artemis.configuration" -}}
 {{- range $i, $instance := .Values.instance }}
 {{- if or $instance.enabled (not (hasKey $instance "enabled")) }}
+{{- $instance := deepCopy $instance -}}
+{{- $_ := set $instance "brokerXml" ($instance.brokerXml | default dict) -}}
+{{- $amqpsPort := ((($instance.service).amqps | default dict).port | default 5672) -}}
+{{- $acceptor := mergeOverwrite (dict "port" $amqpsPort) ($instance.brokerXml.acceptor | default dict) -}}
+{{- if ne (toString $acceptor.port) (toString $amqpsPort) }}{{ fail "eccosp-artemis: brokerXml.acceptor.port must match service.amqps.port" }}{{ end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-cm
+  name: {{ include "eccosp-artemis.instanceName" (dict "root" $ "instance" $instance) }}-cm
   labels:
     backup.component.name: {{ $.Release.Name }}
 data:
@@ -41,9 +47,9 @@ data:
     #ARTEMIS_CLUSTER_PROPS="-Dactivemq.remoting.default.port=61617 -Dactivemq.remoting.amqp.port=5673 -Dactivemq.remoting.stomp.port=61614 -Dactivemq.remoting.hornetq.port=5446"
 
     # Hawtio Properties
-    # HAWTIO_ROLE define the user role or roles required to be able to login to the console. Multiple roles to allow can
+    # HAWTIO_ROLES define the user role or roles required to be able to login to the console. Multiple roles to allow can
     # be separated by a comma. Set to '*' or an empty value to disable role checking when Hawtio authenticates a user.
-    HAWTIO_ROLE='amq'
+    HAWTIO_ROLES='amq'
 
     # Java Opts
     if [ -z "$JAVA_ARGS" ]; then
@@ -71,613 +77,9 @@ data:
         # Uncomment for async profiler
         # DEBUG_ARGS="-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints"
     fi
-  broker.xml: |-
-    <?xml version='1.0'?>
-    <!--
-    Licensed to the Apache Software Foundation (ASF) under one
-    or more contributor license agreements.  See the NOTICE file
-    distributed with this work for additional information
-    regarding copyright ownership.  The ASF licenses this file
-    to you under the Apache License, Version 2.0 (the
-    "License"); you may not use this file except in compliance
-    with the License.  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing,
-    software distributed under the License is distributed on an
-    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-    KIND, either express or implied.  See the License for the
-    specific language governing permissions and limitations
-    under the License.
-    -->
-
-    <configuration xmlns="urn:activemq"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   xmlns:xi="http://www.w3.org/2001/XInclude"
-                   xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
-
-       <core xmlns="urn:activemq:core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:activemq:core ">
-
-          <name>{{- (($instance.brokerXml).default).artemisName | default (printf "%s-%s" "ECCo SP Artemis Internal Broker with SSL-JKS" $instance.name )}}</name>
-
-          <persistence-enabled>{{- (($instance.brokerXml).journal).persistenceEnabled | default true }}</persistence-enabled>
-
-          <!-- It is recommended to keep this value as 1, maximizing the number of records stored about redeliveries.
-               However if you must preserve state of individual redeliveries, you may increase this value or set it to -1 (infinite). -->
-          <max-redelivery-records>{{- (($instance.brokerXml).journal).maxRedeliveryRecords | default 1 }}</max-redelivery-records>
-
-          <!-- this could be ASYNCIO, MAPPED, NIO-->
-          <journal-type>{{- (($instance.brokerXml).journal).type | default "ASYNCIO" }}</journal-type>
-
-          <!-- HA - For HA setup these directories need to point to the same storage between all the nodes -->
-          <paging-directory>{{- (($instance.brokerXml).journal).pagingDirectory | default "data/paging" }}</paging-directory>
-          <bindings-directory>{{- (($instance.brokerXml).journal).bindingsDirectory | default "data/bindings" }}</bindings-directory>
-          <journal-directory>{{- (($instance.brokerXml).journal).journalDirectory | default "data/journal" }}</journal-directory>
-          <large-messages-directory>{{- (($instance.brokerXml).journal).largeMessagesDirectory | default "data/large-messages" }}</large-messages-directory>
-
-          <journal-datasync>{{- (($instance.brokerXml).journal).dataSync | default true }}</journal-datasync>
-          <journal-min-files>{{- (($instance.brokerXml).journal).minFiles | default 2 }}</journal-min-files>
-          <journal-pool-files>{{- (($instance.brokerXml).journal).poolFiles | default 10 }}</journal-pool-files>
-          <journal-device-block-size>{{- (($instance.brokerXml).journal).deviceBlockSize | default 4096 }}</journal-device-block-size>
-          <journal-file-size>{{- (($instance.brokerXml).journal).fileSize | default "10M" }}</journal-file-size>
-
-          <!--
-           This value was determined through a calculation.
-           Your system could perform 50 writes per millisecond
-           on the current journal configuration.
-           That translates as a sync write every 20000 nanoseconds.
-
-           Note: If you specify 0 the system will perform writes directly to the disk.
-                 We recommend this to be 0 if you are using journalType=MAPPED and journal-datasync=false.
-          -->
-          <journal-buffer-timeout>{{- (($instance.brokerXml).journal).bufferTimeout | default 20000 }}</journal-buffer-timeout>
-
-          <!-- When using ASYNCIO, this will determine the writing queue depth for libaio.-->
-          <journal-max-io>{{- (($instance.brokerXml).journal).maxIO | default 4096 }}</journal-max-io>
-
-          <!-- how often we are looking for how many bytes are being used on the disk in ms -->
-          <disk-scan-period>{{- (($instance.brokerXml).default).diskScanPeriod | default 5000 }}</disk-scan-period>
-
-          <!-- once the disk hits this limit the system will block, or close the connection in certain protocols
-               that won't support flow control. -->
-          <max-disk-usage>{{- (($instance.brokerXml).default).diskMaxUsage | default 90 }}</max-disk-usage>
-
-          <!-- should the broker detect dead locks and other issues -->
-          <critical-analyzer>{{- (($instance.brokerXml).criticalAnalyzer).enabled | default true }}</critical-analyzer>
-          <critical-analyzer-timeout>{{- (($instance.brokerXml).criticalAnalyzer).timeout | default 120000 }}</critical-analyzer-timeout>
-          <critical-analyzer-check-period>{{- (($instance.brokerXml).criticalAnalyzer).checkPeriod | default 60000 }}</critical-analyzer-check-period>
-          <critical-analyzer-policy>{{- (($instance.brokerXml).criticalAnalyzer).policy | default "HALT" }}</critical-analyzer-policy>
-
-          <page-sync-timeout>{{- (($instance.brokerXml).default).pageSyncTimeout | default 84000 }}</page-sync-timeout>
-
-          <!-- the system will enter into page mode once you hit this limit. This is an estimate in bytes of how much the messages are using in memory
-          The system will use half of the available memory (-Xmx) by default for the global-max-size.
-          You may specify a different value here if you need to customize it to your needs.-->
-          <global-max-size>{{- (($instance.brokerXml).default).globalMaxSize | default "800M" }}</global-max-size>
-
-          <!-- the maximum number of messages accepted before entering full address mode.
-               if global-max-size is specified the full address mode will be specified by whatever hits it first. -->
-          <global-max-messages>{{- (($instance.brokerXml).default).globalMaxMessages | default -1 }}</global-max-messages>
-
-          <acceptors>
-             <!-- AMQPS Acceptor -->
-             <acceptor name="amqps-broker">
-                tcp://{{- (($instance.brokerXml).acceptor).ip | default "0.0.0.0" }}:{{- (($instance.brokerXml).acceptor).port | default 5672 }}?sslEnabled={{- (($instance.brokerXml).acceptor).sslEnabled | default true }};needClientAuth={{- (($instance.brokerXml).acceptor).needClientAuth | default false }};keyStorePath={{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }};keyStorePassword={{- ($instance.artemisKeystorePassword) | default "password" }};trustStorePath={{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }};trustStorePassword={{- ($instance.artemisKeystorePassword) | default "password" }};protocols={{- (($instance.brokerXml).acceptor).protocols | default "AMQP" }};enabledProtocols={{- (($instance.brokerXml).acceptor).enabledProtocols | default "TLSv1.3" }};transport.enabledCipherSuites={{- (($instance.brokerXml).acceptor).enabledCipherSuites | default "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_AES_128_GCM_SHA256" }}{{- if (($instance.brokerXml).acceptor).properties}}{{- range $j, $item := (($instance.brokerXml).acceptor).properties }};{{- .parameterName }}={{- .value }}{{- end }}{{- end}}
-             </acceptor>
-          </acceptors>
-
-          <security-settings>
-             <security-setting match="#">
-                <permission type="createNonDurableQueue" roles="amq"/>
-                <permission type="deleteNonDurableQueue" roles="amq"/>
-                <permission type="createDurableQueue" roles="amq"/>
-                <permission type="deleteDurableQueue" roles="amq"/>
-                <permission type="createAddress" roles="amq"/>
-                <permission type="deleteAddress" roles="amq"/>
-                <permission type="consume" roles="amq"/>
-                <permission type="browse" roles="amq"/>
-                <permission type="send" roles="amq"/>
-                <!-- we need this otherwise ./artemis data imp wouldn't work -->
-                <permission type="manage" roles="amq"/>
-             </security-setting>
-          </security-settings>
-
-          <address-settings>
-          {{- if (($instance.brokerXml).addressSettings).defaultConfigurationEnabled}}
-             <!--default for catch all-->
-             <address-setting match="#">
-                <dead-letter-address>DLQ</dead-letter-address>
-                <expiry-address>ExpiryQueue</expiry-address>
-                <redelivery-delay>0</redelivery-delay>
-                <!-- if max-size-bytes and max-size-messages were both enabled, the system will enter into paging
-                     based on the first attribute to hits the maximum value -->
-                <max-size-bytes>100M</max-size-bytes>
-
-                <!-- limit for the address in messages, -1 means unlimited -->
-                <max-size-messages>-1</max-size-messages>
-
-                <!-- the size of each file on paging. Notice we keep files in memory while they are in use.
-                     Lower this setting if you have too many queues in memory. -->
-                <page-size-bytes>10M</page-size-bytes>
-
-                <!-- limit how much memory is read from paging into the Queue. -->
-                <max-read-page-bytes>20M</max-read-page-bytes>
-
-                <message-counter-history-day-limit>-1</message-counter-history-day-limit>
-                <address-full-policy>PAGE</address-full-policy>
-                <auto-create-queues>true</auto-create-queues>
-                <auto-create-addresses>true</auto-create-addresses>
-                <auto-delete-queues>false</auto-delete-queues>
-                <auto-delete-addresses>false</auto-delete-addresses>
-             </address-setting>
-             {{- end}}
-        {{- if (($instance.brokerXml).addressSettings).match }}
-          {{- range $_, $item := $instance.brokerXml.addressSettings.match }}
-            {{- range $k, $v := . }}
-             <address-setting match="{{ $k }}">
-              {{- range $s, $path := $v }}
-               <{{($path.parameterName)}}>{{($path.value)}}</{{ ($path.parameterName) }}>
-              {{- end }}
-            {{- end }}
-          {{- end }}
-             </address-setting>
-          {{- end }}
-          </address-settings>
-          <addresses>
-             <address name="DLQ">
-                <anycast>
-                   <queue name="DLQ" />
-                </anycast>
-             </address>
-             <address name="ExpiryQueue">
-                <anycast>
-                   <queue name="ExpiryQueue" />
-                </anycast>
-             </address>
-          </addresses>
-        {{- if ($instance.prometheusEnabled) }}
-          <metrics>
-             <plugin class-name="com.redhat.amq.broker.core.server.metrics.plugins.ArtemisPrometheusMetricsPlugin"/>
-          </metrics>
-        {{- end }}
-
-          <broker-plugins>
-            <broker-plugin class-name="eu.entsoe.ecp.artemis.plugin.logging.EccospAuditLoggerPlugin">
-                <property key="ecpComponentCode" value="{{- (($instance.brokerXml).default).ecpComponentCode | default "CHANGE-ME-COMPONENT-CODE" }}" />
-                <property key="ecpComponentType" value="{{- (($instance.brokerXml).default).componentType | default "ECCo SP Artemis Internal Broker" }}" />
-         </broker-plugin>
-          </broker-plugins>
-
-       </core>
-    </configuration>
-
-  broker-master.xml: |-
-    <?xml version='1.0'?>
-    <!--
-    Licensed to the Apache Software Foundation (ASF) under one
-    or more contributor license agreements.  See the NOTICE file
-    distributed with this work for additional information
-    regarding copyright ownership.  The ASF licenses this file
-    to you under the Apache License, Version 2.0 (the
-    "License"); you may not use this file except in compliance
-    with the License.  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing,
-    software distributed under the License is distributed on an
-    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-    KIND, either express or implied.  See the License for the
-    specific language governing permissions and limitations
-    under the License.
-    -->
-
-    <configuration xmlns="urn:activemq"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   xmlns:xi="http://www.w3.org/2001/XInclude"
-                   xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
-
-       <core xmlns="urn:activemq:core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:activemq:core ">
-
-          <name>{{- (($instance.brokerXml).default).artemisName | default (printf "%s-%s" "ECCo SP Artemis Internal Broker with SSL-JKS" $instance.name )}}</name>
-
-          <persistence-enabled>{{- (($instance.brokerXml).journal).persistenceEnabled | default true }}</persistence-enabled>
-
-          <!-- It is recommended to keep this value as 1, maximizing the number of records stored about redeliveries.
-               However if you must preserve state of individual redeliveries, you may increase this value or set it to -1 (infinite). -->
-          <max-redelivery-records>{{- (($instance.brokerXml).journal).maxRedeliveryRecords | default 1 }}</max-redelivery-records>
-
-          <!-- this could be ASYNCIO, MAPPED, NIO-->
-          <journal-type>{{- (($instance.brokerXml).journal).type | default "ASYNCIO" }}</journal-type>
-
-          <!-- HA - For HA setup these directories need to point to the same storage between all the nodes -->
-          <paging-directory>{{- (($instance.brokerXml).journal).pagingDirectory | default "data/paging" }}</paging-directory>
-          <bindings-directory>{{- (($instance.brokerXml).journal).bindingsDirectory | default "data/bindings" }}</bindings-directory>
-          <journal-directory>{{- (($instance.brokerXml).journal).journalDirectory | default "data/journal" }}</journal-directory>
-          <large-messages-directory>{{- (($instance.brokerXml).journal).largeMessagesDirectory | default "data/large-messages" }}</large-messages-directory>
-
-          <journal-datasync>{{- (($instance.brokerXml).journal).dataSync | default true }}</journal-datasync>
-          <journal-min-files>{{- (($instance.brokerXml).journal).minFiles | default 2 }}</journal-min-files>
-          <journal-pool-files>{{- (($instance.brokerXml).journal).poolFiles | default 10 }}</journal-pool-files>
-          <journal-device-block-size>{{- (($instance.brokerXml).journal).deviceBlockSize | default 4096 }}</journal-device-block-size>
-          <journal-file-size>{{- (($instance.brokerXml).journal).fileSize | default "10M" }}</journal-file-size>
-
-          <!--
-           This value was determined through a calculation.
-           Your system could perform 50 writes per millisecond
-           on the current journal configuration.
-           That translates as a sync write every 20000 nanoseconds.
-
-           Note: If you specify 0 the system will perform writes directly to the disk.
-                 We recommend this to be 0 if you are using journalType=MAPPED and journal-datasync=false.
-          -->
-          <journal-buffer-timeout>{{- (($instance.brokerXml).journal).bufferTimeout | default 20000 }}</journal-buffer-timeout>
-
-          <!-- When using ASYNCIO, this will determine the writing queue depth for libaio.-->
-          <journal-max-io>{{- (($instance.brokerXml).journal).maxIO | default 4096 }}</journal-max-io>
-
-          <!-- HA Connectors used to be announced through cluster connections and notifications -->
-          <connectors>
-            <connector name="MASTER">tcp://MASTER.{{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-headless-svc.{{$.Release.Namespace}}.svc.cluster.local:61616</connector>
-          {{- range untilStep 1 (int $instance.replicaCount) 1 }}
-            <connector name="SLAVE{{ . }}">tcp://SLAVE{{ . }}.{{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-headless-svc.{{$.Release.Namespace}}.svc.cluster.local:61616</connector>
-          {{- end }}
-          </connectors>
-
-          <!-- how often we are looking for how many bytes are being used on the disk in ms -->
-          <disk-scan-period>{{- (($instance.brokerXml).default).diskScanPeriod | default 5000 }}</disk-scan-period>
-
-          <!-- once the disk hits this limit the system will block, or close the connection in certain protocols
-               that won't support flow control. -->
-          <max-disk-usage>{{- (($instance.brokerXml).default).diskMaxUsage | default 90 }}</max-disk-usage>
-
-          <!-- should the broker detect dead locks and other issues -->
-          <critical-analyzer>{{- (($instance.brokerXml).criticalAnalyzer).enabled | default true }}</critical-analyzer>
-          <critical-analyzer-timeout>{{- (($instance.brokerXml).criticalAnalyzer).timeout | default 120000 }}</critical-analyzer-timeout>
-          <critical-analyzer-check-period>{{- (($instance.brokerXml).criticalAnalyzer).checkPeriod | default 60000 }}</critical-analyzer-check-period>
-          <critical-analyzer-policy>{{- (($instance.brokerXml).criticalAnalyzer).policy | default "HALT" }}</critical-analyzer-policy>
-
-          <page-sync-timeout>{{- (($instance.brokerXml).default).pageSyncTimeout | default 84000 }}</page-sync-timeout>
-
-          <!-- the system will enter into page mode once you hit this limit. This is an estimate in bytes of how much the messages are using in memory
-          The system will use half of the available memory (-Xmx) by default for the global-max-size.
-          You may specify a different value here if you need to customize it to your needs.-->
-          <global-max-size>{{- (($instance.brokerXml).default).globalMaxSize | default "800M" }}</global-max-size>
-
-          <!-- the maximum number of messages accepted before entering full address mode.
-               if global-max-size is specified the full address mode will be specified by whatever hits it first. -->
-          <global-max-messages>{{- (($instance.brokerXml).default).globalMaxMessages | default -1 }}</global-max-messages>
-
-          <acceptors>
-             <!-- AMQPS Acceptor -->
-             <acceptor name="amqps-broker">
-                tcp://{{- (($instance.brokerXml).acceptor).ip | default "0.0.0.0" }}:{{- (($instance.brokerXml).acceptor).port | default 5672 }}?sslEnabled={{- (($instance.brokerXml).acceptor).sslEnabled | default true }};needClientAuth={{- (($instance.brokerXml).acceptor).needClientAuth | default false }};keyStorePath={{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }};keyStorePassword={{- ($instance.artemisKeystorePassword) | default "password" }};trustStorePath={{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }};trustStorePassword={{- ($instance.artemisKeystorePassword) | default "password" }};protocols={{- (($instance.brokerXml).acceptor).protocols | default "AMQP" }};enabledProtocols={{- (($instance.brokerXml).acceptor).enabledProtocols | default "TLSv1.3" }};transport.enabledCipherSuites={{- (($instance.brokerXml).acceptor).enabledCipherSuites | default "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_AES_128_GCM_SHA256" }}{{- if (($instance.brokerXml).acceptor).properties}}{{- range $j, $item := (($instance.brokerXml).acceptor).properties }};{{- .parameterName }}={{- .value }}{{- end }}{{- end}}
-             </acceptor>
-             <!-- HA - Acceptor for the cluster communication in HA setup -->
-             <acceptor name="artemis">tcp://{{- ((($instance.brokerXml).highAvailability).acceptor).ip | default "0.0.0.0" }}:{{- ((($instance.brokerXml).highAvailability).acceptor).port | default 61616 }}?tcpSendBufferSize={{- ((($instance.brokerXml).highAvailability).acceptor).tcpSendBufferSize | default 1048576 }};tcpReceiveBufferSize={{- ((($instance.brokerXml).highAvailability).acceptor).tcpReceiveBufferSize | default 1048576 }};protocols={{- ((($instance.brokerXml).highAvailability).acceptor).protocols | default "CORE" }};useEpoll={{- ((($instance.brokerXml).highAvailability).acceptor).useEpoll | default true }}{{- if ((($instance.brokerXml).highAvailability).acceptor).properties }}{{- range $j, $item := ((($instance.brokerXml).highAvailability).acceptor).properties }};{{- .parameterName }}={{- .value }}{{- end }}{{- end}}</acceptor>
-          </acceptors>
-          <!-- HA - Cluster connection and policy settings -->
-                <cluster-user>{{- (($instance.brokerXml).highAvailability).user | default "broker-ha" }}</cluster-user>
-                <cluster-password>{{- (($instance.brokerXml).highAvailability).password | default "Uu:dz9bkmw+45?TqMd?f" }}</cluster-password>
-
-                <cluster-connections>
-                    <cluster-connection name="{{- (($instance.brokerXml).highAvailability).connectionName | default "ha-cluster" }}">
-                        <connector-ref>MASTER</connector-ref>
-                        <static-connectors>
-                        {{- range untilStep 1 (int $instance.replicaCount) 1 }}
-                            <connector-ref>SLAVE{{ . }}</connector-ref>
-                        {{- end }}
-                        </static-connectors>
-                    </cluster-connection>
-                </cluster-connections>
-
-                <ha-policy>
-                   <shared-store>
-                        <master>
-                            <failover-on-shutdown>true</failover-on-shutdown>
-                        </master>
-                    </shared-store>
-                </ha-policy>
-          <security-settings>
-             <security-setting match="#">
-                <permission type="createNonDurableQueue" roles="amq"/>
-                <permission type="deleteNonDurableQueue" roles="amq"/>
-                <permission type="createDurableQueue" roles="amq"/>
-                <permission type="deleteDurableQueue" roles="amq"/>
-                <permission type="createAddress" roles="amq"/>
-                <permission type="deleteAddress" roles="amq"/>
-                <permission type="consume" roles="amq"/>
-                <permission type="browse" roles="amq"/>
-                <permission type="send" roles="amq"/>
-                <!-- we need this otherwise ./artemis data imp wouldn't work -->
-                <permission type="manage" roles="amq"/>
-             </security-setting>
-          </security-settings>
-
-          <address-settings>
-          {{- if (($instance.brokerXml).addressSettings).defaultConfigurationEnabled}}
-             <!--default for catch all-->
-             <address-setting match="#">
-                <dead-letter-address>DLQ</dead-letter-address>
-                <expiry-address>ExpiryQueue</expiry-address>
-                <redelivery-delay>0</redelivery-delay>
-                <!-- if max-size-bytes and max-size-messages were both enabled, the system will enter into paging
-                     based on the first attribute to hits the maximum value -->
-                <max-size-bytes>100M</max-size-bytes>
-
-                <!-- limit for the address in messages, -1 means unlimited -->
-                <max-size-messages>-1</max-size-messages>
-
-                <!-- the size of each file on paging. Notice we keep files in memory while they are in use.
-                     Lower this setting if you have too many queues in memory. -->
-                <page-size-bytes>10M</page-size-bytes>
-
-                <!-- limit how much memory is read from paging into the Queue. -->
-                <max-read-page-bytes>20M</max-read-page-bytes>
-
-                <message-counter-history-day-limit>-1</message-counter-history-day-limit>
-                <address-full-policy>PAGE</address-full-policy>
-                <auto-create-queues>true</auto-create-queues>
-                <auto-create-addresses>true</auto-create-addresses>
-                <auto-delete-queues>false</auto-delete-queues>
-                <auto-delete-addresses>false</auto-delete-addresses>
-             </address-setting>
-             {{- end}}
-        {{- if (($instance.brokerXml).addressSettings).match }}
-          {{- range $_, $item := $instance.brokerXml.addressSettings.match }}
-            {{- range $k, $v := . }}
-             <address-setting match="{{ $k }}">
-              {{- range $s, $path := $v }}
-               <{{($path.parameterName)}}>{{($path.value)}}</{{ ($path.parameterName) }}>
-              {{- end }}
-            {{- end }}
-             </address-setting>
-            {{- end }}
-          {{- end }}
-          </address-settings>
-          <addresses>
-             <address name="DLQ">
-                <anycast>
-                   <queue name="DLQ" />
-                </anycast>
-             </address>
-             <address name="ExpiryQueue">
-                <anycast>
-                   <queue name="ExpiryQueue" />
-                </anycast>
-             </address>
-          </addresses>
-        {{- if ($instance.prometheusEnabled) }}
-          <metrics>
-             <plugin class-name="com.redhat.amq.broker.core.server.metrics.plugins.ArtemisPrometheusMetricsPlugin"/>
-          </metrics>
-        {{- end }}
-
-          <broker-plugins>
-            <broker-plugin class-name="eu.entsoe.ecp.artemis.plugin.logging.EccospAuditLoggerPlugin">
-                <property key="ecpComponentCode" value="{{- (($instance.brokerXml).default).ecpComponentCode | default "CHANGE-ME-COMPONENT-CODE" }}" />
-                <property key="ecpComponentType" value="{{- (($instance.brokerXml).default).componentType | default "ECCo SP Artemis Internal Broker" }}" />
-         </broker-plugin>
-          </broker-plugins>
-
-       </core>
-    </configuration>
-
-  broker-slave.xml: |-
-    <?xml version='1.0'?>
-    <!--
-    Licensed to the Apache Software Foundation (ASF) under one
-    or more contributor license agreements.  See the NOTICE file
-    distributed with this work for additional information
-    regarding copyright ownership.  The ASF licenses this file
-    to you under the Apache License, Version 2.0 (the
-    "License"); you may not use this file except in compliance
-    with the License.  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing,
-    software distributed under the License is distributed on an
-    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-    KIND, either express or implied.  See the License for the
-    specific language governing permissions and limitations
-    under the License.
-    -->
-
-    <configuration xmlns="urn:activemq"
-                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                   xmlns:xi="http://www.w3.org/2001/XInclude"
-                   xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
-
-       <core xmlns="urn:activemq:core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:activemq:core ">
-
-          <name>{{- (($instance.brokerXml).default).artemisName | default (printf "%s-%s" "ECCo SP Artemis Internal Broker with SSL-JKS" $instance.name )}}</name>
-
-          <persistence-enabled>{{- (($instance.brokerXml).journal).persistenceEnabled | default true }}</persistence-enabled>
-
-          <!-- It is recommended to keep this value as 1, maximizing the number of records stored about redeliveries.
-               However if you must preserve state of individual redeliveries, you may increase this value or set it to -1 (infinite). -->
-          <max-redelivery-records>{{- (($instance.brokerXml).journal).maxRedeliveryRecords | default 1 }}</max-redelivery-records>
-
-          <!-- this could be ASYNCIO, MAPPED, NIO-->
-          <journal-type>{{- (($instance.brokerXml).journal).type | default "ASYNCIO" }}</journal-type>
-
-          <!-- HA - For HA setup these directories need to point to the same storage between all the nodes -->
-          <paging-directory>{{- (($instance.brokerXml).journal).pagingDirectory | default "data/paging" }}</paging-directory>
-          <bindings-directory>{{- (($instance.brokerXml).journal).bindingsDirectory | default "data/bindings" }}</bindings-directory>
-          <journal-directory>{{- (($instance.brokerXml).journal).journalDirectory | default "data/journal" }}</journal-directory>
-          <large-messages-directory>{{- (($instance.brokerXml).journal).largeMessagesDirectory | default "data/large-messages" }}</large-messages-directory>
-
-          <journal-datasync>{{- (($instance.brokerXml).journal).dataSync | default true }}</journal-datasync>
-          <journal-min-files>{{- (($instance.brokerXml).journal).minFiles | default 2 }}</journal-min-files>
-          <journal-pool-files>{{- (($instance.brokerXml).journal).poolFiles | default 10 }}</journal-pool-files>
-          <journal-device-block-size>{{- (($instance.brokerXml).journal).deviceBlockSize | default 4096 }}</journal-device-block-size>
-          <journal-file-size>{{- (($instance.brokerXml).journal).fileSize | default "10M" }}</journal-file-size>
-
-          <!--
-           This value was determined through a calculation.
-           Your system could perform 50 writes per millisecond
-           on the current journal configuration.
-           That translates as a sync write every 20000 nanoseconds.
-
-           Note: If you specify 0 the system will perform writes directly to the disk.
-                 We recommend this to be 0 if you are using journalType=MAPPED and journal-datasync=false.
-          -->
-          <journal-buffer-timeout>{{- (($instance.brokerXml).journal).bufferTimeout | default 20000 }}</journal-buffer-timeout>
-
-          <!-- When using ASYNCIO, this will determine the writing queue depth for libaio.-->
-          <journal-max-io>{{- (($instance.brokerXml).journal).maxIO | default 4096 }}</journal-max-io>
-          <!-- HA Connectors used to be announced through cluster connections and notifications -->
-          <connectors>
-            <connector name="MASTER">tcp://MASTER.{{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-headless-svc.{{$.Release.Namespace}}.svc.cluster.local:61616</connector>
-          {{- range untilStep 1 (int $instance.replicaCount) 1 }}
-            <connector name="SLAVE{{ . }}">tcp://SLAVE{{ . }}.{{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-headless-svc.{{$.Release.Namespace}}.svc.cluster.local:61616</connector>
-          {{- end }}
-          </connectors>
-
-          <!-- how often we are looking for how many bytes are being used on the disk in ms -->
-          <disk-scan-period>{{- (($instance.brokerXml).default).diskScanPeriod | default 5000 }}</disk-scan-period>
-
-          <!-- once the disk hits this limit the system will block, or close the connection in certain protocols
-               that won't support flow control. -->
-          <max-disk-usage>{{- (($instance.brokerXml).default).diskMaxUsage | default 90 }}</max-disk-usage>
-
-          <!-- should the broker detect dead locks and other issues -->
-          <critical-analyzer>{{- (($instance.brokerXml).criticalAnalyzer).enabled | default true }}</critical-analyzer>
-          <critical-analyzer-timeout>{{- (($instance.brokerXml).criticalAnalyzer).timeout | default 120000 }}</critical-analyzer-timeout>
-          <critical-analyzer-check-period>{{- (($instance.brokerXml).criticalAnalyzer).checkPeriod | default 60000 }}</critical-analyzer-check-period>
-          <critical-analyzer-policy>{{- (($instance.brokerXml).criticalAnalyzer).policy | default "HALT" }}</critical-analyzer-policy>
-
-          <page-sync-timeout>{{- (($instance.brokerXml).default).pageSyncTimeout | default 84000 }}</page-sync-timeout>
-
-          <!-- the system will enter into page mode once you hit this limit. This is an estimate in bytes of how much the messages are using in memory
-          The system will use half of the available memory (-Xmx) by default for the global-max-size.
-          You may specify a different value here if you need to customize it to your needs.-->
-          <global-max-size>{{- (($instance.brokerXml).default).globalMaxSize | default "800M" }}</global-max-size>
-
-          <!-- the maximum number of messages accepted before entering full address mode.
-               if global-max-size is specified the full address mode will be specified by whatever hits it first. -->
-          <global-max-messages>{{- (($instance.brokerXml).default).globalMaxMessages | default -1 }}</global-max-messages>
-
-          <acceptors>
-             <!-- AMQPS Acceptor -->
-             <acceptor name="amqps-broker">
-                tcp://{{- (($instance.brokerXml).acceptor).ip | default "0.0.0.0" }}:{{- (($instance.brokerXml).acceptor).port | default 5672 }}?sslEnabled={{- (($instance.brokerXml).acceptor).sslEnabled | default true }};needClientAuth={{- (($instance.brokerXml).acceptor).needClientAuth | default false }};keyStorePath={{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }};keyStorePassword={{- ($instance.artemisKeystorePassword) | default "password" }};trustStorePath={{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }};trustStorePassword={{- ($instance.artemisKeystorePassword) | default "password" }};protocols={{- (($instance.brokerXml).acceptor).protocols | default "AMQP" }};enabledProtocols={{- (($instance.brokerXml).acceptor).enabledProtocols | default "TLSv1.3" }};transport.enabledCipherSuites={{- (($instance.brokerXml).acceptor).enabledCipherSuites | default "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_AES_128_GCM_SHA256" }}{{- if (($instance.brokerXml).acceptor).properties}}{{- range $j, $item := (($instance.brokerXml).acceptor).properties }};{{- .parameterName }}={{- .value }}{{- end }}{{- end}}
-             </acceptor>
-             <!-- HA - Acceptor for the cluster communication in HA setup -->
-             <acceptor name="artemis">tcp://{{- ((($instance.brokerXml).highAvailability).acceptor).ip | default "0.0.0.0" }}:{{- ((($instance.brokerXml).highAvailability).acceptor).port | default 61616 }}?tcpSendBufferSize={{- ((($instance.brokerXml).highAvailability).acceptor).tcpSendBufferSize | default 1048576 }};tcpReceiveBufferSize={{- ((($instance.brokerXml).highAvailability).acceptor).tcpReceiveBufferSize | default 1048576 }};protocols={{- ((($instance.brokerXml).highAvailability).acceptor).protocols | default "CORE" }};useEpoll={{- ((($instance.brokerXml).highAvailability).acceptor).useEpoll | default true }}{{- if ((($instance.brokerXml).highAvailability).acceptor).properties }}{{- range $j, $item := ((($instance.brokerXml).highAvailability).acceptor).properties }};{{- .parameterName }}={{- .value }}{{- end }}{{- end}}</acceptor>
-          </acceptors>
-          <!-- HA - Cluster connection and policy settings -->
-                <cluster-user>{{- (($instance.brokerXml).highAvailability).user | default "broker-ha" }}</cluster-user>
-                <cluster-password>{{- (($instance.brokerXml).highAvailability).password | default "Uu:dz9bkmw+45?TqMd?f" }}</cluster-password>
-                <cluster-connections>
-                  <cluster-connection name="{{- (($instance.brokerXml).highAvailability).connectionName | default "ha-cluster" }}">
-                    <connector-ref>SLAVE-REF</connector-ref>
-                      <static-connectors>
-                        <connector-ref>MASTER</connector-ref>
-                      </static-connectors>
-                  </cluster-connection>
-                </cluster-connections>
-                <ha-policy>
-                  <shared-store>
-                    <slave>
-                      <failover-on-shutdown>true</failover-on-shutdown>
-                      <allow-failback>true</allow-failback>
-                    </slave>
-                  </shared-store>
-                </ha-policy>
-
-          <security-settings>
-             <security-setting match="#">
-                <permission type="createNonDurableQueue" roles="amq"/>
-                <permission type="deleteNonDurableQueue" roles="amq"/>
-                <permission type="createDurableQueue" roles="amq"/>
-                <permission type="deleteDurableQueue" roles="amq"/>
-                <permission type="createAddress" roles="amq"/>
-                <permission type="deleteAddress" roles="amq"/>
-                <permission type="consume" roles="amq"/>
-                <permission type="browse" roles="amq"/>
-                <permission type="send" roles="amq"/>
-                <!-- we need this otherwise ./artemis data imp wouldn't work -->
-                <permission type="manage" roles="amq"/>
-             </security-setting>
-          </security-settings>
-
-          <address-settings>
-          {{- if (($instance.brokerXml).addressSettings).defaultConfigurationEnabled}}
-             <!--default for catch all-->
-             <address-setting match="#">
-                <dead-letter-address>DLQ</dead-letter-address>
-                <expiry-address>ExpiryQueue</expiry-address>
-                <redelivery-delay>0</redelivery-delay>
-                <!-- if max-size-bytes and max-size-messages were both enabled, the system will enter into paging
-                     based on the first attribute to hits the maximum value -->
-                <max-size-bytes>100M</max-size-bytes>
-
-                <!-- limit for the address in messages, -1 means unlimited -->
-                <max-size-messages>-1</max-size-messages>
-
-                <!-- the size of each file on paging. Notice we keep files in memory while they are in use.
-                     Lower this setting if you have too many queues in memory. -->
-                <page-size-bytes>10M</page-size-bytes>
-
-                <!-- limit how much memory is read from paging into the Queue. -->
-                <max-read-page-bytes>20M</max-read-page-bytes>
-
-                <message-counter-history-day-limit>-1</message-counter-history-day-limit>
-                <address-full-policy>PAGE</address-full-policy>
-                <auto-create-queues>true</auto-create-queues>
-                <auto-create-addresses>true</auto-create-addresses>
-                <auto-delete-queues>false</auto-delete-queues>
-                <auto-delete-addresses>false</auto-delete-addresses>
-             </address-setting>
-             {{- end}}
-        {{- if (($instance.brokerXml).addressSettings).match }}
-          {{- range $_, $item := $instance.brokerXml.addressSettings.match }}
-            {{- range $k, $v := . }}
-             <address-setting match="{{ $k }}">
-              {{- range $s, $path := $v }}
-               <{{($path.parameterName)}}>{{($path.value)}}</{{ ($path.parameterName) }}>
-              {{- end }}
-            {{- end }}
-             </address-setting>
-          {{- end }}
-        {{- end }}
-          </address-settings>
-          <addresses>
-             <address name="DLQ">
-                <anycast>
-                   <queue name="DLQ" />
-                </anycast>
-             </address>
-             <address name="ExpiryQueue">
-                <anycast>
-                   <queue name="ExpiryQueue" />
-                </anycast>
-             </address>
-          </addresses>
-        {{- if ($instance.prometheusEnabled) }}
-          <metrics>
-             <plugin class-name="com.redhat.amq.broker.core.server.metrics.plugins.ArtemisPrometheusMetricsPlugin"/>
-          </metrics>
-        {{- end }}
-
-          <broker-plugins>
-            <broker-plugin class-name="eu.entsoe.ecp.artemis.plugin.logging.EccospAuditLoggerPlugin">
-                <property key="ecpComponentCode" value="{{- (($instance.brokerXml).default).ecpComponentCode | default "CHANGE-ME-COMPONENT-CODE" }}" />
-                <property key="ecpComponentType" value="{{- (($instance.brokerXml).default).componentType | default "ECCo SP Artemis Internal Broker" }}" />
-         </broker-plugin>
-          </broker-plugins>
-
-       </core>
-    </configuration>
-
-
-
 
   configure-cluster.sh: |
-    ## Script designed to finish the broker.xml templates for Master/Slave HA. Replica with hostname ending with 0, will
+    ## Script designed to finish the broker.xml templates for Master/Slave HA. Replica with ordinal 0 will
     ## always be considered a master. Other replicas are marked as slaves. The pod names are loaded to the broker-master.xml
     ## and broker-slave.xml files and used for configuration.
     REPLICA_COUNT={{- (int $instance.replicaCount) }}
@@ -687,15 +89,16 @@ data:
     echo Starting decision between MASTER/SLAVE nodes for Artemis HA config.
     echo Number of nodes in the Artemis cluster: $REPLICA_COUNT
     POD_NUMBER=$(hostname | sed 's/.*-//')
-    if [[ $POD_NUMBER -eq 0 ]] ; then
+    POD_PREFIX=$(hostname | sed 's/-[0-9][0-9]*$//')
+    if [ "$POD_NUMBER" -eq 0 ]; then
       echo "This pod has value: $POD_NUMBER in hostname, thus is considered as a Master."
       MASTER_POD_NAME=$(hostname)
       echo "Hostname of Master pod is: $MASTER_POD_NAME".
       echo "Replacing the Master name in the broker-master.xml file."
       sed -i "s/MASTER/$MASTER_POD_NAME/g" /tmp/broker-master.xml.tmp
       echo "Replacing the Slave names in the broker-master.xml file."
-      SLAVE_POD_NAME=$(echo $(hostname) | sed 's/.$//')
-      for i in $(seq $REPLICA_COUNT)
+      SLAVE_POD_NAME="$POD_PREFIX-"
+      for i in $(seq "$((REPLICA_COUNT - 1))" -1 1)
         do
           sed -i "s/SLAVE$i/$SLAVE_POD_NAME$i/g" /tmp/broker-master.xml.tmp
         done
@@ -707,42 +110,18 @@ data:
       echo "Hostname of Slave pod is: $SLAVE_POD_NAME".
       echo "Replacing the Slave name in the broker.xml file."
       sed -i "s/SLAVE-REF/$SLAVE_POD_NAME/g" /tmp/broker-slave.xml.tmp
-      SLAVE_POD_NAME=$(echo $(hostname) | sed 's/.$//')
-      for i in $(seq $REPLICA_COUNT)
+      SLAVE_POD_NAME="$POD_PREFIX-"
+      for i in $(seq "$((REPLICA_COUNT - 1))" -1 1)
         do
           echo $i ,$SLAVE_POD_NAME$i, SLAVE$i
           sed -i "s/SLAVE$i/$SLAVE_POD_NAME$i/g" /tmp/broker-slave.xml.tmp
         done
       echo "Replacing the Master names in the broker.xml file."
-      MASTER_POD_NAME=$(echo $(hostname) | sed 's/.$//')0
+      MASTER_POD_NAME="$POD_PREFIX-0"
       sed -i "s/MASTER/$MASTER_POD_NAME/g" /tmp/broker-slave.xml.tmp
       echo "Configuration has been finished, copying file: /tmp/broker-slave.xml.tmp to the: /opt/eccosp-artemis/etc/broker.xml path."
       cp /tmp/broker-slave.xml.tmp /opt/eccosp-artemis/etc/broker.xml
     fi
-
-  artemis-users.properties: |-
-    ## ---------------------------------------------------------------------------
-    ## Licensed to the Apache Software Foundation (ASF) under one or more
-    ## contributor license agreements.  See the NOTICE file distributed with
-    ## this work for additional information regarding copyright ownership.
-    ## The ASF licenses this file to You under the Apache License, Version 2.0
-    ## (the "License"); you may not use this file except in compliance with
-    ## the License.  You may obtain a copy of the License at
-    ##
-    ## http://www.apache.org/licenses/LICENSE-2.0
-    ##
-    ## Unless required by applicable law or agreed to in writing, software
-    ## distributed under the License is distributed on an "AS IS" BASIS,
-    ## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    ## See the License for the specific language governing permissions and
-    ## limitations under the License.
-    ## ---------------------------------------------------------------------------
-    {{- if ($instance.artemisUsers) }}
-      {{- range $j, $item := ($instance.artemisUsers) }}
-      {{ $item.login }}={{ $item.password }}
-    {{- end }}
-    {{ else }}
-      {{($instance.ecpProperties).artemisDefaultUser | default "endpoint" }}={{ ($instance.ecpProperties).artemisDefaultPassword | default "password" }}{{- end }}
 
   artemis-roles.properties: |-
     ## ---------------------------------------------------------------------------
@@ -770,51 +149,6 @@ data:
     amq: {{ join "," $logins }}
     {{ else }}
     {{ ($instance.ecpProperties).artemisDefaultRole | default "amq" }}={{($instance.ecpProperties).artemisDefaultUser | default "endpoint" }}{{- end }}
-
-  bootstrap.xml: |-
-    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <!--
-      ~ Licensed to the Apache Software Foundation (ASF) under one or more
-      ~ contributor license agreements. See the NOTICE file distributed with
-      ~ this work for additional information regarding copyright ownership.
-      ~ The ASF licenses this file to You under the Apache License, Version 2.0
-      ~ (the "License"); you may not use this file except in compliance with
-      ~ the License. You may obtain a copy of the License at
-      ~
-      ~     http://www.apache.org/licenses/LICENSE-2.0
-      ~
-      ~ Unless required by applicable law or agreed to in writing, software
-      ~ distributed under the License is distributed on an "AS IS" BASIS,
-      ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-      ~ See the License for the specific language governing permissions and
-      ~ limitations under the License.
-      -->
-
-    <broker xmlns="http://activemq.apache.org/schema">
-
-        <jaas-security domain="activemq"/>
-
-        <!-- artemis.URI.instance is parsed from artemis.instance by the CLI startup.
-             This is to avoid situations where you could have spaces or special characters on this URI -->
-        <server configuration="file:/opt/eccosp-artemis/etc/broker.xml" />
-
-        <!-- The web server is only bound to localhost by default -->
-        <web path="web" rootRedirectLocation="console">
-      {{- if (($instance.service).https).port }}
-        <binding name="artemis" uri="https://{{ (($instance.service).https).host | default "0.0.0.0" }}:{{ (($instance.service).https).port | default "8162" }}" keyStorePath="{{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }}" keyStorePassword="{{- ($instance.artemisKeystorePassword) | default "password" }}" trustStorePath="{{- ($instance.artemisKeystoreLocation) | default "/opt/eccosp-artemis/etc/keystore.jks" }}" trustStorePassword="{{- ($instance.artemisKeystorePassword) | default "password" }}" sniHostCheck="false">
-      {{ else }}
-        <binding name="artemis" uri="http://{{ (($instance.service).http).host | default "0.0.0.0" }}:{{ (($instance.service).http).port | default "8161" }}">
-      {{- end }}
-          <app name="branding" url="activemq-branding" war="activemq-branding.war"/>
-          <app name="plugin" url="artemis-plugin" war="artemis-plugin.war"/>
-          <app name="console" url="console" war="console.war"/>
-      {{- if ($instance.prometheusEnabled) }}
-        <app url="metrics" war="metrics.war"/>
-      {{- end }}
-        </binding>
-        </web>
-
-    </broker>
 
   jolokia-access.xml: |-
     <?xml version="1.0" encoding="utf-8"?>
@@ -945,7 +279,7 @@ data:
     appender.log_file.type = RollingFile
     appender.log_file.name = log_file
     appender.log_file.fileName = ${sys:artemis.instance}/log/artemis.log
-    appender.log_file.filePattern = ${sys:artemis.instance}/log/artemis.%d{yyyy-MM-dd}.log.gz
+    appender.log_file.filePattern = ${sys:artemis.instance}/log/artemis.%d{yyyy-MM-dd}.%i.log.gz
     appender.log_file.layout.type = PatternLayout
     appender.log_file.layout.pattern = %d %-5level [%logger] %msg%n
     appender.log_file.policies.type = Policies
@@ -958,7 +292,7 @@ data:
     appender.audit_log_file.type = RollingFile
     appender.audit_log_file.name = audit_log_file
     appender.audit_log_file.fileName = ${sys:artemis.instance}/log/audit.log
-    appender.audit_log_file.filePattern = ${sys:artemis.instance}/log/audit.%d{yyyy-MM-dd}.log.gz
+    appender.audit_log_file.filePattern = ${sys:artemis.instance}/log/audit.%d{yyyy-MM-dd}.%i.log.gz
     appender.audit_log_file.layout.type = PatternLayout
     appender.audit_log_file.layout.pattern = %d [AUDIT](%t) %msg%n
     appender.audit_log_file.policies.type = Policies
@@ -971,6 +305,25 @@ data:
   {{ .subPath }}: |-
   {{- .content | nindent 4 }}
   {{ end }}
----
 {{- end }}
 {{ end }}
+{{- end -}}
+
+{{- range $instance := .Values.instance }}
+{{- if or $instance.enabled (not (hasKey $instance "enabled")) }}
+{{- $values := deepCopy $.Values -}}
+{{- $_ := set $values "instance" (list $instance) -}}
+{{- $context := dict "Values" $values "Release" $.Release "Chart" $.Chart "Capabilities" $.Capabilities "Files" $.Files "Template" $.Template -}}
+{{- $configuration := include "eccosp-artemis.configuration" $context | fromYaml -}}
+{{- if hasKey $configuration "Error" }}{{ fail "eccosp-artemis: invalid rendered configuration" }}{{ end -}}
+{{- $public := omit $configuration.data "broker.xml" "broker-master.xml" "broker-slave.xml" "bootstrap.xml" "artemis-users.properties" -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "eccosp-artemis.instanceName" (dict "root" $ "instance" $instance) }}-cm
+  labels:
+    backup.component.name: {{ $.Release.Name | quote }}
+data: {{ toYaml $public | nindent 2 }}
+{{ end }}
+{{- end }}

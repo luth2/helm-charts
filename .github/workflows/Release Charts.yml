@@ -1,39 +1,87 @@
 name: Release Charts
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
     paths:
-      - charts/**
+    - 'charts/**'
+    - 'ecco-sp/**'
+    - '.github/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-charts-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  validation:
+    uses: ./.github/workflows/lint.yml
+
   release:
+    needs: validation
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout
+      uses: actions/checkout@v5.0.0
+      with:
+        fetch-depth: 0
 
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+    - name: Configure Git
+      env:
+        RELEASE_ACTOR: ${{ github.actor }}
+      run: |
+        git config user.name "$RELEASE_ACTOR"
+        git config user.email "$RELEASE_ACTOR@users.noreply.github.com"
 
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.7.0
-        with:
-          skip_existing: true
-          packages_with_index: true
-        env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Install Helm 3.19.0 (verified download)
+      run: bash .github/scripts/setup-tools.sh helm-only
+
+    - name: Download packages from this run's successful validation
+      uses: actions/download-artifact@v4.3.0
+      with:
+        pattern: ci-charts-*
+        path: .ci-artifacts/release
+
+    - name: Stage only the five validated packages
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        mkdir -p .cr-release-packages
+        for chart in ecp-endpoint ecp-directory ecp-broker eccosp-artemis ecco-sp; do
+          packages=(.ci-artifacts/release/ci-charts-"${chart}"/"${chart}"-*.tgz)
+          if (( ${#packages[@]} != 1 )); then
+            echo "Expected exactly one validated package for ${chart}" >&2
+            exit 1
+          fi
+          cp -- "${packages[0]}" .cr-release-packages/
+        done
+        staged=(.cr-release-packages/*.tgz)
+        test "${#staged[@]}" -eq 5
+
+    - name: Install chart-releaser
+      uses: helm/chart-releaser-action@v1.7.0
+      with:
+        version: v1.7.0
+        install_only: true
+
+    - name: Publish validated packages and index
+      shell: bash
+      env:
+        CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # v1.7.0 cr.sh main() only defines latest_tag in the packaging branch,
+      # then unconditionally expands it with nounset. Use CLI, not an env shim:
+      # https://github.com/helm/chart-releaser-action/blob/v1.7.0/cr.sh
+      run: |
+        set -euo pipefail
+        owner="${GITHUB_REPOSITORY%%/*}"
+        repo="${GITHUB_REPOSITORY#*/}"
+        mkdir -p .cr-index
+        cr upload -o "$owner" -r "$repo" -c "$GITHUB_SHA" --packages-with-index --push --skip-existing
+        cr index -o "$owner" -r "$repo" --push --packages-with-index --index-path .

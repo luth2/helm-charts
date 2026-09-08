@@ -15,7 +15,21 @@ The key features of ECCo SP:
 * Access to the network is restricted through a registration process and controlled centrally. Compromised endpoints can be excluded from the network.
 * Secure Software Development Lifecycle, which guarantees regular vulnerability scanning, continuous updating of the software and immediate patching if necessary.
 
-## ECP – Energy Communication Platform
+## Kubernetes-Deployment mit Helm
+
+Die Helm Charts 5.0.0 verwenden Anwendungsimages 4.17.0 und benoetigen Helm 3
+sowie Kubernetes >= 1.28. Der Umbrella ist standardmaessig komplett deaktiviert;
+die sechs Beispiele aktivieren jeweils einen Komponententyp mit vollstaendiger
+Instanzkonfiguration. Jede aktivierte Instanz braucht ein extern bereitgestelltes,
+befuelltes `existingSecret`. Private Vollkonfigurationen werden nicht von Helm
+erzeugt; Registrierung und Keystore-Versorgung bleiben externe Betriebsaufgaben.
+
+Deployment in fuenf Schritten, Secret-Key-Vertrag, HA, Rotation und sichere
+Migration mit PVC-Erhalt: [Dokumentation/Helm_Charts.md](Dokumentation/Helm_Charts.md).
+Bestehende Releases nicht blind aktualisieren: Selector und PVC-Namen koennen
+sich aendern; auch `fullnameOverride` garantiert kein kompatibles Upgrade.
+
+## ECP - Energy Communication Platform
 
 ![ECP](https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png)
 
@@ -26,7 +40,7 @@ ECP contains three components :
 * The client component - ECP Endpoint
 * The service provider components - ECP Component Directory and ECP Broker
 
-## EDX – ENTSO-E Data Exchange
+## EDX - ENTSO-E Data Exchange
 
 ![EDX](https://www.entsoe.eu/assets/graphics/uploads/thumbnail_5y7u5lpwyjwcs4rm.png)
 

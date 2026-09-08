@@ -1,77 +1,43 @@
-{{- range $i, $instance := .Values.instance }}
-{{- if $instance.service }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}-svc
-  labels:
-    backup.component.name: {{ $.Release.Name }}
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-{{- with $instance.service.annotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-{{- end }}
-spec:
-  type: {{ ($instance.service).type | default "ClusterIP" }}
-  ports:
-    {{- if $instance.service.http }}
-    - name: http
-      port: {{ $instance.service.http.port }}
-      protocol: TCP
-      {{- if $instance.service.http.nodePort }}
-      nodePort: {{ $instance.service.http.nodePort }}
-      {{- end }}
-    {{- end}}
-    {{- if $instance.service.https }}
-    - name: https
-      port: {{ $instance.service.https.port }}
-      protocol: TCP
-      {{- if $instance.service.https.nodePort }}
-      nodePort: {{ $instance.service.https.nodePort }}
-      {{- end }}
-    {{- end}}
-
-  selector:
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-{{- if $instance.service.loadBalancerIP }}
-  loadBalancerIP: {{ $instance.service.loadBalancerIP }}
-{{- end }}
-{{- if $instance.sessionReplication }}
+{{- range $instance := .Values.instance }}
+{{- $name := include "ecp-directory.instanceName" (dict "root" $ "instance" $instance) -}}
+{{- if or (not (hasKey $instance "enabled")) $instance.enabled }}
+{{- $service := $instance.service | default dict -}}
+{{- range $headless := list false true }}
+{{- $type := ternary "ClusterIP" (default "ClusterIP" $service.type) $headless }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-  annotations:
-    service.alpha.kubernetes.io/tolerate-unready-endpoints: 'true'
+  name: {{ $name }}-{{ ternary "headless-svc" "svc" $headless }}
   labels:
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+  {{- with $service.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-  ports:
-    {{- if $instance.service.http }}
-    - name: http
-      port: {{ $instance.service.http.port }}
-      protocol: TCP
-      {{- if $instance.service.http.nodePort }}
-      nodePort: {{ $instance.service.http.nodePort }}
-      {{- end }}
-    {{- end}}
-    {{- if $instance.service.https }}
-    - name: https
-      protocol: TCP
-      port: {{ $instance.service.https.port }}
-      targetPort: {{ $instance.service.https.port }}
-    {{- end}}
-  selector:
-    app: {{$.Release.Namespace}}-{{ $.Chart.Name }}-{{$instance.name}}
-  type: ClusterIP
+  type: {{ $type }}
+  {{- if $headless }}
   clusterIP: None
   publishNotReadyAddresses: true
+  {{- else if and (eq $type "LoadBalancer") $service.loadBalancerIP }}
+  loadBalancerIP: {{ $service.loadBalancerIP | quote }}
+  {{- end }}
+  selector:
+    app: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+  ports:
+    {{- range $port := list "http" "https" }}
+    {{- with get $service $port }}
+    - name: {{ $port }}
+      port: {{ .port }}
+      targetPort: {{ $port }}
+      protocol: TCP
+      {{- if and (not $headless) (has $type (list "NodePort" "LoadBalancer")) .nodePort }}
+      nodePort: {{ .nodePort }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
 {{- end }}
----
 {{- end }}
-{{- range $j, $item := $instance.services }}
-{{- toYaml $item | nindent 0 }}
----
 {{- end }}
-{{ end}}
