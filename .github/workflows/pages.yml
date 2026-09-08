@@ -65,7 +65,7 @@ jobs:
       run: python .github/pages/build_portal.py merge --helm-repository .ci-artifacts/helm-repository
     - name: Upload complete Pages artifact
       if: github.event_name != 'pull_request'
-      uses: actions/upload-pages-artifact@v4
+      uses: actions/upload-pages-artifact@v5
       with:
         path: .ci-artifacts/pages/publish
 
@@ -82,4 +82,4 @@ jobs:
     steps:
     - name: Deploy documentation and Helm repository together
       id: deployment
-      uses: actions/deploy-pages@v4
+      uses: actions/deploy-pages@v5
