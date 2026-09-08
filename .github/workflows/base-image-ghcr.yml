@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -86,7 +86,7 @@ jobs:
           artifact-name: eccosp-base-sbom
 
       - name: Submit SBOM to dependency graph
-        uses: advanced-security/spdx-dependency-submission-action@v0.2.0
+        uses: advanced-security/spdx-dependency-submission-action@v0.3.2
         with:
           filePath: eccosp-base-sbom.spdx.json
 
@@ -111,7 +111,7 @@ jobs:
             "${{ steps.image_ref.outputs.ref }}"
 
       - name: Scan image for CVEs
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.image_ref.outputs.ref }}
           format: sarif
