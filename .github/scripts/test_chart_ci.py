@@ -1,9 +1,13 @@
 """Tests for the CI code itself; these do not substitute for Helm rendering."""
 
 from copy import deepcopy
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 import re
+import runpy
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -490,7 +494,53 @@ class TemplateBoundaryTests(unittest.TestCase):
                     documents(previous + separator.lstrip() + following)
 
 
+class WorkflowTests(unittest.TestCase):
+    def workflow(self, name):
+        # BaseLoader preserves GitHub's YAML 1.2 "on" key instead of YAML 1.1 True.
+        path = runner.ROOT / ".github/workflows" / name
+        return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+    def test_lint_matrix_and_discovery_cover_four_standalone_charts(self):
+        workflow = self.workflow("lint.yml")
+        self.assertEqual(workflow["on"]["pull_request"]["paths"], ["charts/**", ".github/**"])
+        self.assertEqual(set(workflow["jobs"]), {"standalone"})
+        job = workflow["jobs"]["standalone"]
+        self.assertEqual(job["strategy"]["matrix"]["chart"], list(CHARTS))
+        runs = [step["run"] for step in job["steps"] if "run" in step]
+        self.assertIn("python -m unittest discover -s .github/scripts -p 'test_*.py' -v", runs)
+        self.assertIn("python .github/scripts/validate_charts.py --chart '${{ matrix.chart }}'", runs)
+
+    def test_release_requires_and_stages_exactly_four_validated_packages(self):
+        workflow = self.workflow("Release Charts.yml")
+        self.assertEqual(workflow["on"]["push"]["paths"], ["charts/**", ".github/**"])
+        self.assertEqual(workflow["jobs"]["validation"]["uses"], "./.github/workflows/lint.yml")
+        release = workflow["jobs"]["release"]
+        self.assertEqual(release["needs"], "validation")
+        stage = next(step for step in release["steps"] if step.get("name") == "Stage only the four validated packages")
+        charts = re.search(r"for chart in ([^;]+); do", stage["run"])
+        self.assertIsNotNone(charts)
+        self.assertEqual(charts.group(1).split(), list(CHARTS))
+        self.assertIn('if (( ${#packages[@]} != 1 )); then', stage["run"])
+        self.assertIn('test "${#staged[@]}" -eq 4', stage["run"])
+
+
 class RunnerTests(unittest.TestCase):
+    def test_cli_choices_and_rejected_target_never_invoke_tools(self):
+        for arguments, code in ((["--help"], 0), (["--chart", "ecco-sp"], 2)):
+            output = StringIO()
+            with (self.subTest(arguments=arguments),
+                  patch.object(sys, "argv", [str(runner.__file__), *arguments]),
+                  patch.object(subprocess, "run", side_effect=AssertionError("Unexpected tool invocation")) as run,
+                  redirect_stdout(output), redirect_stderr(output)):
+                with self.assertRaises(SystemExit) as exited:
+                    runpy.run_path(runner.__file__, run_name="__main__")
+                self.assertEqual(exited.exception.code, code)
+                run.assert_not_called()
+            if code == 0:
+                self.assertIn("{" + ",".join(CHARTS) + "}", output.getvalue())
+            else:
+                self.assertIn("invalid choice", output.getvalue())
+
     def test_metadata_validates_each_standalone_chart(self):
         with tempfile.TemporaryDirectory() as temporary, patch.object(runner, "ROOT", Path(temporary)):
             metadata = {}
