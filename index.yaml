@@ -1,6 +1,34 @@
 apiVersion: v1
 entries:
   ecco-sp:
+  - apiVersion: v2
+    appVersion: 4.17.0
+    created: "2026-09-08T16:58:00.646644607Z"
+    dependencies:
+    - condition: ecp-endpoint.enabled
+      name: ecp-endpoint
+      repository: file://../charts/ecp-endpoint
+      version: 5.0.0
+    - condition: ecp-directory.enabled
+      name: ecp-directory
+      repository: file://../charts/ecp-directory
+      version: 5.0.0
+    - condition: ecp-broker.enabled
+      name: ecp-broker
+      repository: file://../charts/ecp-broker
+      version: 5.0.0
+    - condition: eccosp-artemis.enabled
+      name: eccosp-artemis
+      repository: file://../charts/eccosp-artemis
+      version: 5.0.0
+    description: ecco-sp Helm chart for Kubernetes
+    digest: 4237caa57ff12f81b09cf86eec63f5b3dc95ae6784cb75227dd70dddd9ec4ab7
+    kubeVersion: '>=1.28.0-0'
+    name: ecco-sp
+    type: application
+    urls:
+    - ecco-sp-5.0.0.tgz
+    version: 5.0.0
   - apiVersion: v1
     appVersion: "1.0"
     created: "2025-06-15T16:58:44.553114377Z"
@@ -28,6 +56,22 @@ entries:
     - https://github.com/luth2/helm-charts/releases/download/ecco-sp-4.16.0/ecco-sp-4.16.0.tgz
     version: 4.16.0
   eccosp-artemis:
+  - apiVersion: v2
+    appVersion: 4.17.0
+    created: "2026-09-08T16:58:00.808468645Z"
+    description: A Helm chart for Kubernetes
+    digest: 684d3b8aade5cad82fc5e6fbfe3c7c6485dd9cadf570e0ed9cb20c49e6bdad10
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: eccosp-artemis
+    type: application
+    urls:
+    - eccosp-artemis-5.0.0.tgz
+    version: 5.0.0
   - apiVersion: v1
     appVersion: "1.0"
     created: "2025-11-18T16:28:47.835115575Z"
@@ -47,6 +91,22 @@ entries:
     - eccosp-artemis-4.16.0.tgz
     version: 4.16.0
   ecp-broker:
+  - apiVersion: v2
+    appVersion: 4.17.0
+    created: "2026-09-08T16:58:00.9511336Z"
+    description: A Helm chart for Kubernetes
+    digest: 6f199c221ac5d349b5ce6fa1b5c078baf55ee856d55553960c5b1e79acf78fb4
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: ecp-broker
+    type: application
+    urls:
+    - ecp-broker-5.0.0.tgz
+    version: 5.0.0
   - apiVersion: v1
     appVersion: "1.0"
     created: "2025-11-18T16:29:03.190629782Z"
@@ -66,6 +126,22 @@ entries:
     - ecp-broker-4.16.0.tgz
     version: 4.16.0
   ecp-directory:
+  - apiVersion: v2
+    appVersion: 4.17.0
+    created: "2026-09-08T16:58:01.129220032Z"
+    description: A Helm chart for Kubernetes
+    digest: e6652397bc1986beec0036e04d5e422d962a26da1d24a52ff62f81d449cd079e
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: ecp-directory
+    type: application
+    urls:
+    - ecp-directory-5.0.0.tgz
+    version: 5.0.0
   - apiVersion: v1
     appVersion: "1.0"
     created: "2025-11-11T18:00:52.808332959Z"
@@ -85,6 +161,22 @@ entries:
     - ecp-directory-4.16.0.tgz
     version: 4.16.0
   ecp-endpoint:
+  - apiVersion: v2
+    appVersion: 4.17.0
+    created: "2026-09-08T16:58:01.313219274Z"
+    description: A Helm chart for Kubernetes
+    digest: 81652785245a8f9aeb45ef90a10d6d3b0996a2d2b56355b27e8cc2892a9a1682
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: ecp-endpoint
+    type: application
+    urls:
+    - ecp-endpoint-5.0.0.tgz
+    version: 5.0.0
   - apiVersion: v1
     appVersion: "1.0"
     created: "2025-11-11T18:58:55.027250283Z"
@@ -103,4 +195,4 @@ entries:
     urls:
     - ecp-endpoint-4.16.0.tgz
     version: 4.16.0
-generated: "2025-11-18T16:29:03.19065005Z"
+generated: "2026-09-08T16:58:01.313250505Z"
