@@ -18,16 +18,38 @@ The key features of ECCo SP:
 ## Kubernetes-Deployment mit Helm
 
 Die Helm Charts 5.0.0 verwenden Anwendungsimages 4.17.0 und benoetigen Helm 3
-sowie Kubernetes >= 1.28. Der Umbrella ist standardmaessig komplett deaktiviert;
-die sechs Beispiele aktivieren jeweils einen Komponententyp mit vollstaendiger
-Instanzkonfiguration. Jede aktivierte Instanz braucht ein extern bereitgestelltes,
-befuelltes `existingSecret`. Private Vollkonfigurationen werden nicht von Helm
-erzeugt; Registrierung und Keystore-Versorgung bleiben externe Betriebsaufgaben.
+sowie Kubernetes >= 1.28. Es gibt ausschliesslich vier Standalone-Charts:
+[charts/ecp-endpoint/README.md](charts/ecp-endpoint/README.md),
+[charts/ecp-directory/README.md](charts/ecp-directory/README.md),
+[charts/ecp-broker/README.md](charts/ecp-broker/README.md) und
+[charts/eccosp-artemis/README.md](charts/eccosp-artemis/README.md).
+Jedes Chart wird direkt aus seinem Verzeichnis als unabhaengiger Helm-Release
+installiert, aktualisiert und zurueckgerollt; Partner werden nicht mitinstalliert.
+Die Chart-Version bleibt 5.0.0.
+
+Pro Release die kanonischen Chart-Values vollstaendig in eine eigene Betreiberdatei
+kopieren und anpassen. Helm ersetzt Instanzlisten, statt ihre Eintraege zu mergen.
+Jede aktivierte Instanz braucht ein extern bereitgestelltes, befuelltes
+`existingSecret`; die unveraenderten Defaults scheitern absichtlich beim Lint/Rendern
+am leeren Secret-Namen. Helm erzeugt keine Secrets oder privaten Vollkonfigurationen;
+Registrierung und Keystore-Versorgung bleiben externe Betriebsaufgaben.
+
+Alle vier Charts bieten optionales Routing mit `instance[].gateway.enabled: false`
+als Default. Voraussetzungen und Beispiele: [Dokumentation/Gateway_API.md](Dokumentation/Gateway_API.md).
 
 Deployment in fuenf Schritten, Secret-Key-Vertrag, HA, Rotation und sichere
 Migration mit PVC-Erhalt: [Dokumentation/Helm_Charts.md](Dokumentation/Helm_Charts.md).
 Bestehende Releases nicht blind aktualisieren: Selector und PVC-Namen koennen
 sich aendern; auch `fullnameOverride` garantiert kein kompatibles Upgrade.
+HA benoetigt abgestimmte externe Konfiguration und geeignetes Storage; Root-
+Initcontainer verhindern trotz Non-Root-Anwendung eine pauschale Restricted-PSA-
+Kompatibilitaet und koennen bei NFS `root_squash` scheitern.
+
+Die CI validiert die vier Standalone-Charts ohne Cluster, einschliesslich
+synthetischer Fixtures, Lint, Rendern und Paketen. Fuer Gateway-Ressourcen werden
+die gepinnten Gateway-API-CRD-Quellen v1.4.1 ueber verifiziertes HTTPS geladen,
+per SHA-256 geprueft und in strikte Schemas ueberfuehrt. Das fuehrt keine CEL-
+Regeln aus und ersetzt keine Laufzeit- oder Clustertests.
 
 ## ECP - Energy Communication Platform
 

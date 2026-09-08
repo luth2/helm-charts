@@ -6,7 +6,7 @@ Neue Installationen mit expliziten Instanz-Values und bereits bereitgestellten
 externen Secrets aufbauen. Bestehende Installationen zuerst sichern und gestuft
 migrieren, nicht blind mit `helm upgrade` aktualisieren.
 
-Alle fuenf Charts haben Version **5.0.0**, `appVersion` **4.17.0** und setzen
+Alle vier Standalone-Charts haben unveraendert Version **5.0.0**, `appVersion` **4.17.0** und setzen
 Kubernetes >= 1.28 sowie Helm 3 voraus. Die CI verwendet Helm 3.19.0.
 Chart-Version und Image-Version sind unterschiedliche Versionsachsen.
 Die Default-Image-Tags sind Strings, nicht `latest`; BusyBox ist auf 1.37.0 gesetzt.
@@ -19,7 +19,7 @@ moeglich; bei gesetztem Digest hat dieser Vorrang vor dem Tag.
 
 - `Chart.yaml: version` versioniert das Helm-Chart: Paket `ecp-broker-5.0.0.tgz`
    und GitHub-Release/Tag `ecp-broker-5.0.0`. Bei Chart-Aenderungen diese Version
-   erhoehen und die zugehoerige Umbrella-Dependency anpassen.
+   fuer eine neue Veroeffentlichung erhoehen.
 - `Chart.yaml: appVersion` beschreibt die Anwendung. Es darf unabhaengig von der
    Chart-Version wechseln und bestimmt weder Paketnamen noch Dependency-Versionen.
 - `instance[].image.tag` bzw. `image.digest` bestimmt das tatsaechliche Containerimage;
@@ -36,20 +36,20 @@ moeglich; bei gesetztem Digest hat dieser Vorrang vor dem Tag.
 | [../charts/ecp-directory/README.md](../charts/ecp-directory/README.md) | Component Directory | [../charts/ecp-directory/values.yaml](../charts/ecp-directory/values.yaml) |
 | [../charts/ecp-broker/README.md](../charts/ecp-broker/README.md) | ECP Broker | [../charts/ecp-broker/values.yaml](../charts/ecp-broker/values.yaml) |
 | [../charts/eccosp-artemis/README.md](../charts/eccosp-artemis/README.md) | Interner Artemis-Broker | [../charts/eccosp-artemis/values.yaml](../charts/eccosp-artemis/values.yaml) |
-| [../ecco-sp/Chart.yaml](../ecco-sp/Chart.yaml) | Umbrella mit vier optionalen Subcharts | [../ecco-sp/values.yaml](../ecco-sp/values.yaml) |
 
-Die Quelle der Subcharts liegt ausschliesslich unter `charts/`. Der Umbrella
-deklariert lokale Dependencies mit exakt derselben Version. Dependency-Pakete
-sind Build-Ergebnisse, keine zweite zu pflegende Template-Quelle.
+Die Chart-Quellen liegen ausschliesslich unter `charts/`. Jede Komponente wird
+direkt aus ihrem Chart-Verzeichnis als unabhaengiger Helm-Release installiert,
+aktualisiert und zurueckgerollt. Es gibt keinen gemeinsamen Plattform-Release
+und keinen Dependency-Build fuer diese Charts. Partnerdienste und ihre
+Verbindungen muessen separat bereitgestellt und konfiguriert werden.
 Die Charts installieren weder Datenbanken noch EDX Toolbox oder Service Catalogue.
 
 ## Konfigurationsvertrag: oeffentlich und privat strikt trennen
 
 Jede aktivierte Instanz braucht `instance[].existingSecret` im Release-Namespace.
 Die Standalone-Defaults lassen diesen String absichtlich leer: Lint und Rendern
-ohne Betreiberkonfiguration sollen scheitern. Im Umbrella sind alle vier
-Komponenten standardmaessig deaktiviert. Ein leeres Umbrella-Rendering ist daher
-beabsichtigt und kein Deployment einer funktionsfaehigen Plattform.
+ohne Betreiberkonfiguration sollen scheitern. Die jeweilige Default-Instanz ist
+aktiviert; ein leeres Secret-Feld ist keine einsatzbereite Konfiguration.
 
 Helm erzeugt **kein Secret**. Es projiziert eine oeffentliche ConfigMap zusammen
 mit ausgewaehlten Keys eines vorhandenen Secrets und bindet die Dateien ein.
@@ -70,7 +70,7 @@ Passwortwert. Es gibt keinen Merge zwischen Values und externer Vollkonfiguratio
 | AR | `artemis-users.properties` | Single: `broker.xml`; HA: `broker-master.xml` und `broker-slave.xml`; mit Web-Service: `bootstrap.xml` |
 
 Web-Service bedeutet ein konfiguriertes `service.http` oder `service.https`.
-Alle Broker-Beispiele enthalten HTTPS, benoetigen also `bootstrap.xml`.
+Die Broker-Defaults enthalten HTTPS, benoetigen also `bootstrap.xml`.
 Bei HA werden die Master-/Slave-Eingaben durch den nichtprivilegierten
 Initcontainer verarbeitet; das daraus entstehende Arbeits-XML ist keine von
 Helm aus privaten Values gerenderte Vollkonfiguration.
@@ -96,7 +96,7 @@ Vor dem Start muessen in diesen externen Dateien zusammenpassen:
 
 | Bereich | Tatsaechliche Wirkung |
 | --- | --- |
-| `image`, `replicaCount`, `resourcesK8s`, `securityContext`, Storage, Service, Ingress, Probes | Kubernetes-Ressourcen und Pod-Konfiguration |
+| `image`, `replicaCount`, `resourcesK8s`, `securityContext`, Storage, Service, Ingress, Gateway, Probes | Kubernetes-Ressourcen und Pod-Konfiguration |
 | EP/CD `envConf.resourcesJvm`, `envConf.ecpLogFullStackTrace` | Oeffentliche JVM-Startkonfiguration |
 | BR/AR `env.resourcesJvm` | Oeffentliche Artemis-Startkonfiguration |
 | EP/CD `dataDirectory`, `loggingFilePath` | Daten-/Logs-PVC-Mountpfade; externe Properties muessen dazu passen |
@@ -127,29 +127,30 @@ Vertrags fuer private Inhalte benutzen.
 
 ## Beispiele, Listen und globale Einstellungen
 
-Jedes der sechs Beispiele enthaelt eine komplette Instanz auf Basis der
-kanonischen Values. Nur der jeweilige Komponententyp wird aktiviert; andere
-bleiben ueber die Umbrella-Basis aus. Die Secret-Namen sind konkrete Platzhalter
-fuer extern bereitzustellende Objekte, keine mitgelieferten Secrets.
+Pro Release die gesamten kanonischen Values des passenden Charts in eine eigene
+Betreiberdatei kopieren. Darin alle Instanzeinstellungen pruefen, insbesondere
+Name, `existingSecret`, Image, Storage, Ressourcen, Ports und externe Verbindungen.
+Die folgenden Secret-Namen sind Platzhalter fuer extern bereitzustellende Objekte,
+keine mitgelieferten Secrets.
 
-| Beispiel | Instanz | `existingSecret` |
-| --- | --- | --- |
-| [../ecco-sp/values-ecp-endpoint-ep1.yaml](../ecco-sp/values-ecp-endpoint-ep1.yaml) | `ep1` | `ecp-endpoint-ep1-config` |
-| [../ecco-sp/values-ecp-endpoint-ep2.yaml](../ecco-sp/values-ecp-endpoint-ep2.yaml) | `ep2` | `ecp-endpoint-ep2-config` |
-| [../ecco-sp/values-ecp-directory-cd.yaml](../ecco-sp/values-ecp-directory-cd.yaml) | `cd` | `ecp-directory-cd-config` |
-| [../ecco-sp/values-ecp-broker-br.yaml](../ecco-sp/values-ecp-broker-br.yaml) | `br` | `ecp-broker-br-config` |
-| [../ecco-sp/values-eccosp-artemis-eptb1.yaml](../ecco-sp/values-eccosp-artemis-eptb1.yaml) | `artemis-eptb1` | `eccosp-artemis-eptb1-config` |
-| [../ecco-sp/values-eccosp-artemis-eptb2.yaml](../ecco-sp/values-eccosp-artemis-eptb2.yaml) | `artemis-eptb2` | `eccosp-artemis-eptb2-config` |
+| Chart | Release | Instanz | `existingSecret` |
+| --- | --- | --- | --- |
+| Endpoint | `ep1` | `ep1` | `ecp-endpoint-ep1-config` |
+| Directory | `cd` | `cd` | `ecp-directory-cd-config` |
+| ECP Broker | `br` | `br` | `ecp-broker-br-config` |
+| Interner Artemis-Broker | `eptb1` | `artemis-eptb1` | `eccosp-artemis-eptb1-config` |
 
-**Helm ersetzt Listen.** EP1 und EP2 nicht einfach als zwei `-f`-Dateien stapeln:
-Die letzte Endpoint-Liste gewinnt. Dasselbe gilt fuer EPTB1/EPTB2. Fuer beide
-Instanzen eine gemeinsame vollstaendige Liste mit beiden Eintraegen pflegen.
-Dateien unterschiedlicher Komponententypen lassen sich kombinieren. Zwei
-unabhaengige Instanzen sind kein HA-Cluster. EP2 aktiviert JMX nicht automatisch.
+**Helm ersetzt Listen.** Fuer mehrere Instanzen desselben Charts eine gemeinsame
+vollstaendige `instance`-Liste mit allen Eintraegen pflegen oder getrennte Releases
+verwenden. Zwei `-f`-Dateien mit je einer Instanz werden nicht zusammengefuehrt:
+Die letzte Liste gewinnt. Values verschiedener Charts gehoeren in getrennte
+Helm-Aufrufe, nicht in einen gemeinsamen Aufruf. Zwei unabhaengige Instanzen
+sind kein HA-Cluster. Eine weitere Endpoint-Instanz aktiviert JMX nicht automatisch.
 
-Die Beispiele enthalten keine Root-`global`-Overrides. Globale Betreiberwerte
-zentral setzen, statt versehentlich mit einem spaeteren Beispiel Storage oder
-Registry-Konfiguration zu ueberschreiben:
+`global` liegt an der Wurzel jeder Standalone-Values-Datei und gilt nur fuer den
+jeweiligen Release. Gemeinsame Betreiberwerte bewusst in allen betroffenen
+Dateien pflegen, statt Storage oder Registry-Konfiguration unbeabsichtigt zu
+ueberschreiben:
 
 - `global.storage.class: ''`: `storageClassName` wird bei normalen PVCs weggelassen;
   die Default-StorageClass des Clusters wird verwendet.
@@ -165,7 +166,9 @@ Registry-Konfiguration zu ueberschreiben:
 
 Die folgenden Befehle sind Beispiele fuer den Betreiber, keine hier ausgefuehrten
 Aktionen. Alle Pfade gelten ab Repository-Root. Fuer eine neue Installation
-verwenden wir Release `platform` und Namespace `eccosp`.
+verwenden wir die getrennten Releases `cd`, `br`, `eptb1` und `ep1` im Namespace
+`eccosp`. Die Betreiberdateien liegen im selbst anzulegenden Verzeichnis
+`../eccosp-values` ausserhalb des Repositorys und enthalten keine privaten Vollfiles.
 
 ### 1. Zielumgebung und Migrationsbedarf klaeren
 
@@ -183,57 +186,66 @@ Betriebsprozess bereitstellen lassen. Vor Schritt 5 muessen sie vollstaendig
 befuellt sein; ein leerer Secret-Platzhalter genuegt nicht. Die Beispiele legen
 keine Benutzer, Datenbanken, TLS-Zertifikate oder ECP-Registrierungen an.
 
-Die externen Dateien fuer das kombinierte EP1-Beispiel auf diese Services abstimmen:
+Die externen Dateien fuer die vier eigenstaendigen Releases auf diese Services abstimmen:
 
 | Verbindung | Adresse innerhalb desselben Namespace |
 | --- | --- |
-| Directory | `https://platform-ecp-directory-cd-svc:8443/ECP_MODULE` |
-| ECP Broker | `amqps://platform-ecp-broker-br-svc:5671` |
-| Endpoint EP1 | `https://platform-ecp-endpoint-ep1-svc:8443` |
-| Interner Broker fuer EP1 | `amqps://platform-eccosp-artemis-artemis-eptb1-svc:5672` |
-| Interner Broker fuer EP2, falls separat konfiguriert | `amqps://platform-eccosp-artemis-artemis-eptb2-svc:5672` |
+| Directory | `https://cd-ecp-directory-cd-svc:8443/ECP_MODULE` |
+| ECP Broker | `amqps://br-ecp-broker-br-svc:5671` |
+| Endpoint EP1 | `https://ep1-ecp-endpoint-ep1-svc:8443` |
+| Interner Broker fuer EP1 | `amqps://eptb1-eccosp-artemis-artemis-eptb1-svc:5672` |
 
 Diese Adressen sind Beispiele fuer die externen Konfigurationen, keine Helm-
 Substitution. Andere Release-/Instanznamen oder Namespaces verlangen andere
 Adressen und passende Zertifikate. ECP-Komponentencodes extern nach dem
 Registrierungsverfahren festlegen, nicht aus Kubernetes-Namen ableiten.
 
-### 3. Umbrella-Dependencies bauen
+### 3. Vollstaendige Betreiber-Values vorbereiten
 
-```sh
-helm dependency build ./ecco-sp
-```
-
-Die exakt deklarierten lokalen Subchart-Versionen werden paketiert. Ohne Lock
-loest Helm diese lokalen Versionen neu auf. Keine manuellen Chartkopien pflegen.
+Die oben verlinkten kanonischen Values jeweils vollstaendig kopieren: Directory
+nach `../eccosp-values/cd.yaml`, ECP Broker nach `../eccosp-values/br.yaml`,
+Artemis nach `../eccosp-values/eptb1.yaml` und Endpoint nach
+`../eccosp-values/ep1.yaml`. Diese Dateien werden nicht mitgeliefert.
+Die Default-Instanznamen entsprechen der obigen Tabelle. In jeder Datei
+`instance[0].existingSecret` auf das zugehoerige bereitgestellte Secret setzen
+und die gesamte Konfiguration fuer die Zielumgebung pruefen und anpassen.
+`instance` und `global` bleiben direkt an der Values-Wurzel, ohne Chart-Namenspraefix.
+Keine reduzierten Listen mit nur Name und Secret ueber die Defaults legen.
+Fuer zusaetzliche Instanzen jeweils einen vollstaendigen Eintrag pflegen.
 Eine lokale Helm-Installation ist nur fuer die Ausfuehrung der Beispiele noetig,
 nicht fuer das Lesen oder Anpassen der Values.
 
 ### 4. Ohne Cluster linten und rendern
 
-Beispiel fuer CD, BR, EP1 und einen internen Broker in einem Release:
+Jeden Release separat mit seiner vollstaendigen Betreiberdatei pruefen:
 
 ```sh
-helm lint ./ecco-sp --namespace eccosp -f ./ecco-sp/values-ecp-directory-cd.yaml -f ./ecco-sp/values-ecp-broker-br.yaml -f ./ecco-sp/values-eccosp-artemis-eptb1.yaml -f ./ecco-sp/values-ecp-endpoint-ep1.yaml
-helm template platform ./ecco-sp --namespace eccosp -f ./ecco-sp/values-ecp-directory-cd.yaml -f ./ecco-sp/values-ecp-broker-br.yaml -f ./ecco-sp/values-eccosp-artemis-eptb1.yaml -f ./ecco-sp/values-ecp-endpoint-ep1.yaml
+helm lint ./charts/ecp-directory --namespace eccosp -f ../eccosp-values/cd.yaml
+helm template cd ./charts/ecp-directory --namespace eccosp -f ../eccosp-values/cd.yaml
+helm lint ./charts/ecp-broker --namespace eccosp -f ../eccosp-values/br.yaml
+helm template br ./charts/ecp-broker --namespace eccosp -f ../eccosp-values/br.yaml
+helm lint ./charts/eccosp-artemis --namespace eccosp -f ../eccosp-values/eptb1.yaml
+helm template eptb1 ./charts/eccosp-artemis --namespace eccosp -f ../eccosp-values/eptb1.yaml
+helm lint ./charts/ecp-endpoint --namespace eccosp -f ../eccosp-values/ep1.yaml
+helm template ep1 ./charts/ecp-endpoint --namespace eccosp -f ../eccosp-values/ep1.yaml
 ```
 
 Namen, Selector, PVCs, Secret-Referenzen, Ports und SecurityContexts pruefen.
 Ein erfolgreicher Render ist keine Cluster-, Registrierungs- oder Funktionspruefung.
-Nur einen Endpoint testen: ausschliesslich dessen Beispieldatei uebergeben;
+Nur einen Endpoint testen: ausschliesslich dessen Chart und Betreiberdatei verwenden;
 dadurch werden seine extern benoetigten Partner nicht automatisch installiert.
 
-Standalone-Alternative ohne Umbrella, mit vollstaendiger Liste vor `--set`:
+Fuer einen reinen lokalen Smoke-Test mit kanonischer Instanzliste vor `--set`:
 
 ```sh
 helm lint ./charts/ecp-endpoint --namespace eccosp -f ./charts/ecp-endpoint/values.yaml --set 'instance[0].existingSecret=ecp-endpoint-ep1-config'
-helm template platform ./charts/ecp-endpoint --namespace eccosp -f ./charts/ecp-endpoint/values.yaml --set 'instance[0].existingSecret=ecp-endpoint-ep1-config'
+helm template ep1 ./charts/ecp-endpoint --namespace eccosp -f ./charts/ecp-endpoint/values.yaml --set 'instance[0].existingSecret=ecp-endpoint-ep1-config'
 ```
 
 Das explizite `-f` verhindert, dass ein isolierter Listenindex-Override die
 Default-Instanz bis auf den Secret-Namen ersetzt. Entsprechende Standalone-
-Befehle stehen in jedem Chart-README. Umbrella-Beispiele sind verschachtelt und
-nicht unveraendert als Values fuer einen Standalone-Chart geeignet.
+Befehle stehen in jedem Chart-README. Dieser Smoke-Test prueft weder das Secret
+noch die Betriebsfaehigkeit; fuer Deployments die geprueften Betreiberdateien nutzen.
 
 ### 5. Neue Installation und anschliessende Abnahme
 
@@ -241,11 +253,16 @@ Erst nach bereitgestelltem Namespace, befuellten Secrets, vorbereitetem Storage
 und freigegebener externer Konfiguration installieren:
 
 ```sh
-helm install platform ./ecco-sp --namespace eccosp -f ./ecco-sp/values-ecp-directory-cd.yaml -f ./ecco-sp/values-ecp-broker-br.yaml -f ./ecco-sp/values-eccosp-artemis-eptb1.yaml -f ./ecco-sp/values-ecp-endpoint-ep1.yaml --wait --timeout 15m
+helm install cd ./charts/ecp-directory --namespace eccosp -f ../eccosp-values/cd.yaml --wait --timeout 15m
+helm install br ./charts/ecp-broker --namespace eccosp -f ../eccosp-values/br.yaml --wait --timeout 15m
+helm install eptb1 ./charts/eccosp-artemis --namespace eccosp -f ../eccosp-values/eptb1.yaml --wait --timeout 15m
+helm install ep1 ./charts/ecp-endpoint --namespace eccosp -f ../eccosp-values/ep1.yaml --wait --timeout 15m
 ```
 
-Dieser Befehl ist fuer die Single-Instanz-Beispiele und eine **neue** Installation.
-Nicht als Upgrade-/Migrationsrezept verwenden. Er registriert keine Komponenten.
+Diese Befehle gelten fuer Single-Instanzen und eine **neue** Installation.
+Jeden Schritt einzeln pruefen; es gibt keine releaseuebergreifende Transaktion
+oder gemeinsamen Rollback. Nicht als Upgrade-/Migrationsrezept verwenden.
+Die Befehle registrieren keine Komponenten.
 Danach kontrolliert PVC-Bindung, Initcontainer, TLS/Authentifizierung, externe
 Datenbank, ECP-Registrierung und einen vollstaendigen Nachrichtenfluss pruefen.
 Partnerfreigaben und Registration-Tool-Ablauf erfolgen ausserhalb des Charts.
@@ -285,7 +302,7 @@ des Deployment-/Storage-Konzepts, nicht pauschal mehr Rechte.
 
 ### Aussagekraft der Probes
 
-Die ausgelieferten Values und Umbrella-Beispiele enthalten pro Probe nur
+Die ausgelieferten Values enthalten pro Probe nur
 `enabled`: Startup und Readiness sind an, Liveness ist aus. Aktionen, Ports und
 Timing-Defaults liegen im jeweiligen `*.probes`-Template-Helper, den das
 StatefulSet einbindet. Die Standardwerte muessen nicht in Values wiederholt werden.
@@ -352,8 +369,8 @@ Keine Helm-Ausdruecke in externen Dateien erwarten; Namespace und DNS-Suffixe
 werden dort nicht automatisch eingesetzt. Die reservierten Ersetzungstokens
 nicht in anderen XML-Inhalten verwenden.
 
-Fuer `platform`, `eccosp` und `br` lautet etwa der HA-Pod-DNS-Name
-`platform-ecp-broker-br-0.platform-ecp-broker-br-headless-svc.eccosp.svc.cluster.local`.
+Fuer Release `br`, Namespace `eccosp` und Instanz `br` lautet etwa der HA-Pod-DNS-Name
+`br-ecp-broker-br-0.br-ecp-broker-br-headless-svc.eccosp.svc.cluster.local`.
 Bei abweichender Cluster-Domain extern anpassen. Der Headless-Service publiziert
 auch NotReady-Adressen fuer Discovery; Clients verwenden den normalen `-svc`.
 `service.amqp` wird bei BR/AR abgelehnt. `service.amqps.port` ist der Port-Key;
@@ -407,7 +424,23 @@ automatisch AMQP; dafuer einen geeigneten TCP-Zugang planen. Bei BR/AR beeinflus
 `service.https.host` bzw. `service.http.host` die oeffentliche Jolokia-Origin-Policy;
 diese pruefen, statt sich auf den weit gefassten leeren Default zu verlassen.
 
+Alle vier Charts bieten ausserdem optionales Gateway-API-Routing; pro Instanz
+ist `gateway.enabled: false` der Default. Voraussetzungen, Routing und TLS-
+Beispiele stehen in [Gateway_API.md](Gateway_API.md). Die Charts ersetzen damit
+weder die externe Anwendungskonfiguration noch die betriebliche TLS-Abnahme.
+
 ## Migration von bisherigen Charts auf 5.0.0
+
+### Bisherigen Umbrella in unabhaengige Releases ueberfuehren
+
+Der fruehere `ecco-sp`-Umbrella wurde entfernt. Alte verschachtelte Komponenten-
+Values nicht unveraendert weiterreichen: Pro Zielrelease die aktuellen
+Standalone-Defaults vollstaendig uebernehmen und die benoetigten Einstellungen
+an deren Wurzel migrieren. Ein Helm-Release laesst sich nicht durch einen normalen
+Upgrade-Aufruf in mehrere Releases aufteilen. Release-Ownership, Ressourcen-
+und PVC-Namen sowie externe DNS-/TLS-Bezuege nach dem gestuften Ablauf pruefen.
+Keine automatische Ressourcenuebernahme oder gefahrlose Deinstallation des
+alten Releases voraussetzen.
 
 ### Alte private Values migrieren, nicht weiterreichen
 
@@ -458,8 +491,8 @@ Backups unkontrolliert zu vernichten. Kein `--reuse-values` fuer diese Migration
    Headless-Service und StatefulSet-`serviceName` sowie ClaimTemplate-/PVC-Namen
    koennen sich geaendert haben. Diese Felder sind teilweise unveraenderlich.
 4. **PVC-Zuordnung planen:** Ein Claim heisst z.B.
-   `data-platform-ecp-endpoint-ep1-0`, ein Shared-Journal-Claim z.B.
-   `platform-ecp-broker-br-journal-claim`. Alte PVCs werden nicht anhand ihres
+   `data-ep1-ecp-endpoint-ep1-0`, ein Shared-Journal-Claim z.B.
+   `br-ecp-broker-br-journal-claim`. Alte PVCs werden nicht anhand ihres
    Inhalts automatisch gefunden. Neue Namen nicht einfach auf leere Volumes
    zeigen lassen. Kontrolliertes Restore oder explizite PV/PVC-Neuzuordnung mit
    dem Storage-Betreiber planen; Daten-PVCs und Shared-PVCs separat behandeln.
@@ -485,15 +518,23 @@ nur als Aenderung von `replicaCount`.
 ## CI und Grenzen der Nachweise
 
 Die [../.github/workflows/lint.yml](../.github/workflows/lint.yml) prueft alle vier
-Standalone-Charts und den Umbrella ohne Cluster: Fixture-/Assertion-Tests,
-Lint, Rendern, Manifestvalidierung sowie Source- und Paket-Tests einschliesslich
-paketierter Dependencies. Uploads enthalten synthetische Testartefakte und
+Standalone-Charts ohne Cluster: Fixture-/Assertion-Tests,
+Lint, Rendern, Manifestvalidierung sowie Source- und Paket-Tests.
+Uploads enthalten synthetische Testartefakte und
 validierte Pakete, keine realen Secrets. Keine produktiven Konfigurationen in
 Fixtures, Render-Ausgaben oder CI-Uploads einschleusen.
 
+Fuer gerenderte `HTTPRoute`- und `BackendTLSPolicy`-Ressourcen werden die benoetigten
+Gateway-API-CRD-Quellen der gepinnten Version **v1.4.1** ueber verifiziertes HTTPS
+geladen und vor dem Parsen gegen fest hinterlegte SHA-256-Pruefsummen geprueft.
+Daraus erzeugte strikte Schemas dienen der clusterfreien Manifestvalidierung.
+Kubernetes-CEL-Regeln werden dabei nicht ausgefuehrt; dies ist weder ein
+Controller-/Laufzeittest noch ein Test gegen einen Cluster.
+
 Die [../.github/workflows/Release Charts.yml](../.github/workflows/Release%20Charts.yml)
-veroeffentlicht erst nach erfolgreicher Validierung die fuenf validierten Pakete.
-Alle fuenf Chart-Versionen und die Dependency-Versionen gemeinsam halten.
+veroeffentlicht erst nach erfolgreicher Validierung die vier validierten Pakete.
+Die aktuellen Chart-Versionen bleiben 5.0.0; eine gemeinsame Dependency-Version
+ist fuer die unabhaengigen Charts nicht erforderlich.
 CI beweist keine Image-Verfuegbarkeit, Cluster-Admission, Storage-Eignung,
 Registrierung, TLS-/DB-Funktion oder HA-Ausfallsicherheit. Diese Nachweise
 bleiben Aufgabe der anschliessenden Test- und Betriebsabnahme.

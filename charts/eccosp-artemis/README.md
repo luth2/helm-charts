@@ -50,6 +50,15 @@ pruefen nur PID 1, damit passive Backups nicht wegen fehlendem AMQP-Listener
 neu gestartet werden. Weder Variante prueft umfassende Broker-Gesundheit,
 TLS oder erfolgreiche Nachrichtenverarbeitung.
 
+## Ingress und Gateway API
+
+Ingress bleibt verfuegbar; alternativ erzeugt `instance[].gateway.enabled: true`
+eine HTTPRoute fuer den Web-Service. Bei HTTPS wird zusaetzlich eine
+BackendTLSPolicy v1 mit explizitem Backend-Zertifikatsnamen und CA-Vertrauen erzeugt.
+Gateway/Controller/CRDs muessen bereits existieren. AMQP(S) wird nicht geroutet.
+Beide Zugangswege sind standardmaessig aus und fuer Migration parallel nutzbar.
+[Gateway-Konfiguration und TLS-Voraussetzungen](../../Dokumentation/Gateway_API.md).
+
 ## Standalone pruefen
 
 Aus dem Repository-Root, ohne Clusterzugriff:

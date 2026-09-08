@@ -57,6 +57,15 @@ ConfigMap-Ausgabe bleiben defensiver Schutz fuer reservierte private Datei-Keys,
 keine Validierung externer Secret-Inhalte.
 Ein zusaetzlicher Artemis-Bootstrap-Mount gehoert nicht zur Endpoint-Grundkonfiguration.
 
+## Ingress und Gateway API
+
+Ingress bleibt verfuegbar; alternativ erzeugt `instance[].gateway.enabled: true`
+eine HTTPRoute fuer den Web-Service. Bei HTTPS wird zusaetzlich eine
+BackendTLSPolicy v1 mit explizitem Backend-Zertifikatsnamen und CA-Vertrauen erzeugt.
+Gateway/Controller/CRDs muessen bereits existieren. AMQP(S) wird nicht geroutet.
+Beide Zugangswege sind standardmaessig aus und fuer Migration parallel nutzbar.
+[Gateway-Konfiguration und TLS-Voraussetzungen](../../Dokumentation/Gateway_API.md).
+
 ## Defaults und Pruefung
 
 Eine Replik, HTTPS 8443, UID/GID/fsGroup 2000, Daten-PVC 1Gi, Logs-PVC 256Mi.
