@@ -86,7 +86,7 @@ jobs:
           artifact-name: eccosp-base-sbom
 
       - name: Submit SBOM to dependency graph
-        uses: advanced-security/spdx-dependency-submission-action@v0.3.2
+        uses: advanced-security/spdx-dependency-submission-action@v0.4.0
         with:
           filePath: eccosp-base-sbom.spdx.json
 
