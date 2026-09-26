@@ -507,21 +507,24 @@ class WorkflowTests(unittest.TestCase):
         job = workflow["jobs"]["standalone"]
         self.assertEqual(job["strategy"]["matrix"]["chart"], list(CHARTS))
         runs = [step["run"] for step in job["steps"] if "run" in step]
-        self.assertIn("python -m unittest discover -s .github/scripts -p 'test_*.py' -v", runs)
+        self.assertIn("python -m unittest discover -s .github/scripts -p 'test_chart_ci.py' -v", "\n".join(runs))
+        self.assertIn("python -m unittest discover -s .github/scripts -p 'test_gateway_ci.py' -v", "\n".join(runs))
         self.assertIn("python .github/scripts/validate_charts.py --chart '${{ matrix.chart }}'", runs)
 
-    def test_release_requires_and_stages_exactly_four_validated_packages(self):
+    def test_release_requires_validations_and_stages_new_packages(self):
         workflow = self.workflow("Release Charts.yml")
-        self.assertEqual(workflow["on"]["push"]["paths"], ["charts/**", ".github/**"])
+        self.assertEqual(workflow["on"]["push"]["paths"], ["charts/**", ".github/**", "package.json"])
         self.assertEqual(workflow["jobs"]["validation"]["uses"], "./.github/workflows/lint.yml")
+        self.assertEqual(workflow["jobs"]["kubernetes-validation"]["uses"], "./.github/workflows/kubernetes.yml")
+        self.assertEqual(workflow["jobs"]["release-rules"]["uses"], "./.github/workflows/release-rules.yml")
         release = workflow["jobs"]["release"]
-        self.assertEqual(release["needs"], "validation")
-        stage = next(step for step in release["steps"] if step.get("name") == "Stage only the four validated packages")
+        self.assertEqual(release["needs"], ["validation", "kubernetes-validation", "release-rules"])
+        stage = next(step for step in release["steps"] if step.get("name") == "Stage only newly released packages")
         charts = re.search(r"for chart in ([^;]+); do", stage["run"])
         self.assertIsNotNone(charts)
         self.assertEqual(charts.group(1).split(), list(CHARTS))
-        self.assertIn('if (( ${#packages[@]} != 1 )); then', stage["run"])
-        self.assertIn('test "${#staged[@]}" -eq 4', stage["run"])
+        self.assertIn('if (( ${#packages[@]} > 1 )); then', stage["run"])
+        self.assertIn('if (( ${#staged[@]} > 0 )); then', stage["run"])
 
 
 class RunnerTests(unittest.TestCase):
