@@ -13,6 +13,10 @@ metadata:
   labels:
     backup.component.name: {{ $.Release.Name }}
 data:
+  {{- if $instance.prometheusEnabled }}
+  metrics_transform.py: |-
+{{ $.Files.Get "files/metrics_transform.py" | indent 4 }}
+  {{- end }}
   artemis.profile: |-
     # Licensed to the Apache Software Foundation (ASF) under one
     # or more contributor license agreements.  See the NOTICE file

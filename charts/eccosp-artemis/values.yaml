@@ -6,9 +6,10 @@ instance:
   existingSecret: '' # Absichtlich leer: Standalone-Lint/Render muss so fehlschlagen.
   secretRevision: '1' # Bei Secret-Aenderung erhoehen; HA braucht manuellen Neustart.
   checksumConfig: true # Nur oeffentliche ConfigMap-Inhalte.
+  prometheusEnabled: false # Ergaenzt Metrics-Plugin und metrics.war in Kopien der Secret-XMLs.
   image:
     name: entsoe/eccosp-artemis
-    tag: '4.17.0'
+    tag: '4.17.1'
     pullPolicy: IfNotPresent
   replicaCount: 1
   securityContext:
@@ -74,3 +75,6 @@ global:
   imageBusybox:
     name: busybox
     tag: '1.37.0'
+  imageMetricsPython:
+    name: python
+    tag: '3.12-alpine'

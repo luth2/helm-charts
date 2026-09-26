@@ -14,6 +14,7 @@
           "fullnameOverride": {"type": "string", "minLength": 1, "maxLength": 45, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
           "enabled": {"type": "boolean"}, "existingSecret": {"type": "string"},
           "secretRevision": {"type": "string"}, "checksumConfig": {"type": "boolean"},
+          "prometheusEnabled": {"type": "boolean"},
           "image": {"$ref": "#/definitions/image"}, "replicaCount": {"type": "integer", "minimum": 0},
           "keepLogsAfterRestart": {"type": "boolean"},
           "storageData": {"$ref": "#/definitions/quantity"}, "storageLogs": {"$ref": "#/definitions/quantity"}, "storageLogsSize": {"$ref": "#/definitions/quantity"},
@@ -61,6 +62,7 @@
       "properties": {
         "storage": {"type": "object", "properties": {"class": {"type": "string"}}, "additionalProperties": true},
         "imageBusybox": {"type": "object", "properties": {"name": {"type": "string", "minLength": 1}, "tag": {"type": "string", "minLength": 1}}, "additionalProperties": true},
+        "imageMetricsPython": {"$ref": "#/definitions/image"},
         "imagePullSecrets": {"type": "array", "items": {"type": "object", "required": ["name"], "properties": {"name": {"$ref": "#/definitions/secretName"}}}}
       }
     },

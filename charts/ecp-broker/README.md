@@ -1,6 +1,6 @@
 # ECP Broker - Helm Chart
 
-Standalone chart for ECP Broker 4.17.0, Helm 3, and Kubernetes >= 1.28.
+Standalone chart for ECP Broker 4.17.1, Helm 3, and Kubernetes >= 1.28.
 Public defaults: [values.yaml](values.yaml).
 
 Versioned packages instead of a local checkout:
@@ -27,9 +27,39 @@ keystore paths, ECP code, and Directory/registration data externally.
 `artemisUsers` contains only logins for the public `amq` role mapping,
 not passwords, and does not create accounts automatically.
 
-Old `brokerProperties`, private `brokerXml` fields, password values, and
-`prometheusEnabled` values do not modify the complete external files. In particular,
-a value does not enable TLS or metrics configuration in the external XML.
+Old `brokerProperties`, private `brokerXml` fields, and password values do not
+modify the complete external files. Set `instance[].prometheusEnabled: true` to
+add `eu.entsoe.ecp.artemis.plugin.prometheus.EcpPrometheusMetricsPlugin` with
+`ecpBrokerPropertiesLocation=/opt/ecp-broker/config/broker.properties` to the
+effective broker XML, and `metrics.war` to each web binding in `bootstrap.xml`.
+The external Secret remains unchanged: an unprivileged Python init container
+copies and updates its XML in the broker's writable configuration volume, after
+HA configuration when applicable. An HTTP/HTTPS service and its `bootstrap.xml`
+Secret key are required. Existing matching plugin and web-app entries are not
+duplicated. Verify the broker image contains the plugin and WAR before rollout;
+the metrics endpoint still needs appropriate web access controls.
+
+For airgapped clusters, mirror every required image into an internal Artifactory
+Docker repository and configure the full image paths in your deployment values:
+
+```yaml
+global:
+  imageBusybox:
+    name: artifactory.intern.example/docker/busybox
+    tag: '1.37.0'
+  imageMetricsPython:
+    name: artifactory.intern.example/docker/python
+    tag: '3.12-alpine'
+  imagePullSecrets:
+    - name: artifactory-pull
+```
+
+Set `instance[].image.name` to the mirrored `entsoe/ecp-broker` image's full
+Artifactory path in the complete instance values. `imageMetricsPython` is pulled
+only when `prometheusEnabled` is true; the mirrored image must provide `python3`.
+The pull Secret must already exist in the release namespace. No chart downloads
+or mirrors images automatically. Do not place registry credentials in values.
+
 The named `configuration` template renders only public configuration.
 Complete private files are not rendered at all, even internally; private legacy
 data sections and dummy values have been removed. The `omit` lists in `publicConfig`
@@ -38,7 +68,7 @@ file keys, not a validation of external Secret contents.
 
 ## Public Defaults
 
-- One replica, ClusterIP, UID/GID/fsGroup 2000; image tag `'4.17.0'`.
+- One replica, ClusterIP, UID/GID/fsGroup 2000; image tag `'4.17.1'`.
 - `env.resourcesJvm`: JVM heap in the public Artemis startup configuration.
 - Data and journal PVCs: 1Gi each; separate registration tool logs: 64Mi.
   This logs PVC does not mean that the chart performs registration.

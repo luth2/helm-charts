@@ -8,7 +8,7 @@ instance:
   checksumConfig: true # Nur oeffentliche ConfigMap-Inhalte.
   image:
     name: entsoe/ecp-endpoint
-    tag: '4.17.0'
+    tag: '4.17.1'
     pullPolicy: IfNotPresent
   replicaCount: 1
   sessionReplication: false
@@ -36,6 +36,13 @@ instance:
     enabled: true
   livenessProbe:
     enabled: false
+  # Optionaler TCP-Check vor dem Anwendungsstart; keine DB-Anmeldung oder Schema-Pruefung.
+  databaseWait:
+    enabled: false
+    # host: db.example.invalid
+    # port: 5432
+    # attempts: 30
+    # intervalSeconds: 2
   service:
     type: ClusterIP
     https:
@@ -47,7 +54,9 @@ instance:
     # Vorhandenes Gateway, ein parentRef (MVP); siehe README.md und Dokumentation/Helm_Charts.md.
     enabled: false
   ecpProperties:
-    # Abgleich mit externer ecp.properties, KEIN Rendern dieser Vollkonfiguration.
+    # Nur diese oeffentlichen Werte werden vom Chart ausgewertet.
+    # Alle Laufzeit-Properties einschliesslich DB-Credentials gehoeren in die
+    # vollstaendige ecp.properties im bestehenden Secret, nicht in diese Values.
     # Profil dient der HA-Validierung; Logging-Profil auch extern setzen.
     springProfilesActive: 'ecp-nonha, console-logging'
     dataDirectory: /var/lib/ecp-endpoint # Tatsaechlicher PVC-Mountpfad.
@@ -55,6 +64,10 @@ instance:
     loggingFileName: /var/log/ecp-endpoint/ecp.log
     loggingConfig: /etc/ecp-endpoint/ecp-logback.xml
     internalBrokerAuthUser: endpoint # Oeffentliche groups.properties, kein Benutzerkonto.
+    # Nur bei replicaCount > 1: DB-Treiber und URL fuer die HA-Validierung.
+    # Die DB-Verbindung selbst kommt weiterhin aus der externen ecp.properties.
+    # springDatasourceDriverClassName: org.postgresql.Driver
+    # ecpDBUrl: jdbc:postgresql://db.example.invalid:5432/ecp
   envConf:
     resourcesJvm:
       xms: 128M

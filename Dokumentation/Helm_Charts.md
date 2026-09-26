@@ -10,7 +10,7 @@ Set up new installations with explicit instance values and external Secrets
 that have already been provisioned. Back up existing installations first and
 migrate them in stages; do not blindly update them with `helm upgrade`.
 
-The four standalone charts in the **5.x series** use `appVersion` **4.17.0** and require
+The four standalone charts in the **5.x series** use `appVersion` **4.17.1** and require
 Kubernetes >= 1.28 and Helm 3. CI uses Helm 3.19.0.
 Chart versions and image versions are separate versioning dimensions.
 The default image tags are strings, not `latest`; BusyBox is set to 1.37.0.
@@ -164,6 +164,15 @@ rather than unintentionally overwriting storage or registry configuration:
 - `global.imagePullSecrets: []`: no registry credentials are assumed.
    Reference existing pull Secrets in the target namespace if needed.
 - `global.imageBusybox`: `busybox` with tag `'1.37.0'`.
+- BR/AR only: `global.imageMetricsPython` defaults to `python:3.12-alpine` and
+   is used only when `instance[].prometheusEnabled` is true.
+
+For airgapped installations, mirror the application, BusyBox, and (when metrics
+are enabled) Python images into an internal registry. Set the full repository
+in each `instance[].image.name`, `global.imageBusybox.name`, and, for BR/AR,
+`global.imageMetricsPython.name`. Supply existing registry credentials through
+`global.imagePullSecrets` in each standalone release; Helm does not mirror images
+or create pull Secrets. The external HA database is provisioned separately.
 
 ## Deployment in Five Steps
 
@@ -322,9 +331,12 @@ values do not change the default behavior.
 The initial delay is 0, and the success threshold is 1. A reachable TCP port
 proves neither TLS, authentication, database connectivity, registration, nor
 application-level health. PID 1 can exist even when the broker is blocked. Do not
-claim robust, comprehensive health monitoring. `databaseWait` is not supported;
-database initialization and reconnection are the responsibility of the application
-and operations team.
+claim robust, comprehensive health monitoring. EP/CD can optionally set
+`instance[].databaseWait.enabled: true` with a non-secret `host` and TCP `port`
+(optionally `attempts` and `intervalSeconds`). This waits for TCP reachability
+before starting the application, not for authentication, schema readiness, or
+successful SQL queries. Database initialization and reconnection remain the
+responsibility of the application and operations team.
 
 ## Configure High Availability Explicitly
 
@@ -459,7 +471,7 @@ transferred to the externally mounted file.
 | EP `ecpProperties`, CD `ecpDirectoryProperties` | Complete corresponding properties file in the Secret; retain only the path/profile/HA/group values listed above in values |
 | `ecpKeystorePassword`, `ecpAuthKeystorePassword`, `ecpDBKeystorePassword`, CD `ecpDirectoryRegKeystorePassword`, `ecpDirectoryCAKeystorePassword` and associated locations | Configure external properties and server/broker XML consistently with PVC keystores |
 | `ecpDBUsername`, `ecpDBPassword`, datasource/DBCP2 options, validation query | External database configuration; for HA, additionally retain only the credential-free URL and driver for validation |
-| `ecpDBHostname`, `ecpDBName`, `databaseWait` and global MySQL/MsSQL/Postgres/Oracle client images | No more database-wait containers; no database readiness guarantee |
+| `ecpDBHostname`, `ecpDBName`, global MySQL/MsSQL/Postgres/Oracle client images | Optional credential-free TCP `databaseWait.host`/`port` for EP/CD; no SQL, authentication, or database readiness guarantee |
 | `internalBrokerHost`, `internalBrokerUrls`, ports, authentication, keystore, queue, and connection parameters | Full EP configuration is external; only `internalBrokerAuthUser` remains for public group mapping |
 | `ecpCsrfSecret`, Jasypt algorithm, `ecpPasswordProperties.encryptionPassword` | Externally generated/managed values; replace the old fixed CSRF value and known default passwords |
 | `ecpUsersProperties.ecpEndpointUsers`, `ecpUsersProperties.ecpDirectoryUsers`, `usersProperties.users[].password` | External user files; if needed, expose only logins for EP group members; the CD role may remain empty in accordance with the official configuration |
@@ -470,7 +482,7 @@ transferred to the externally mounted file.
 | BR/AR `artemisUsers[].password`, default user/password | External Artemis user file; `artemisUsers` contains only logins for role mapping |
 | AR `artemisKeystoreLocation`, `artemisKeystorePassword` | External bootstrap/broker XML and matching PVC keystores |
 | BR/AR `brokerXml.default`, Journal, CriticalAnalyzer, AddressSettings, acceptor TLS/properties, audit/ECP identifier, `maskPassword`, codec/key, cluster user/password | External single-instance or master/slave XML; retain only required port/topology checks in values |
-| BR/AR `prometheusEnabled` and web bootstrap options | External broker/bootstrap XML; the value does not toggle anything in the external document |
+| BR/AR `prometheusEnabled` and web bootstrap options | With `prometheusEnabled: true`, an unprivileged init container adds the manufacturer metrics plugin to the effective broker XML and `metrics.war` to the effective bootstrap XML after HA configuration, where applicable. The external Secret XML is not changed; provide complete files and an HTTP/HTTPS service. Configure the optional Python init image via `global.imageMetricsPython` for airgapped clusters. Other web bootstrap settings remain in the external XML. |
 | Old EP bootstrap custom mount targeting an unrelated Artemis path | Remove; not part of the base Endpoint configuration |
 
 Old defaults may remain in previous Helm release Secrets, ConfigMaps, backups,

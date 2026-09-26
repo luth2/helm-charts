@@ -8,7 +8,7 @@ instance:
   checksumConfig: true # Nur oeffentliche ConfigMap-Inhalte.
   image:
     name: entsoe/ecp-directory
-    tag: '4.17.0'
+    tag: '4.17.1'
     pullPolicy: IfNotPresent
   replicaCount: 1
   sessionReplication: true # Cluster-Konfiguration auch im externen server.xml pflegen.
@@ -36,6 +36,13 @@ instance:
     enabled: true
   livenessProbe:
     enabled: false
+  # Optionaler TCP-Check vor dem Anwendungsstart; keine DB-Anmeldung oder Schema-Pruefung.
+  databaseWait:
+    enabled: false
+    # host: db.example.invalid
+    # port: 5432
+    # attempts: 30
+    # intervalSeconds: 2
   service:
     type: ClusterIP
     https:
@@ -54,6 +61,10 @@ instance:
     loggingFilePath: /var/log/ecp-directory # Tatsaechlicher Logs-Mountpfad.
     loggingFileName: /var/log/ecp-directory/ecp.log
     loggingConfig: /etc/ecp-directory/ecp-logback.xml
+    # Nur bei replicaCount > 1: DB-Treiber und URL fuer die HA-Validierung.
+    # Die DB-Verbindung selbst kommt aus der externen ecp-directory.properties.
+    # springDatasourceDriverClassName: org.postgresql.Driver
+    # ecpDBUrl: jdbc:postgresql://db.example.invalid:5432/ecp
   envConf:
     resourcesJvm:
       xms: 64M

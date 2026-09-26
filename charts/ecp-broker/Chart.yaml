@@ -1,6 +1,6 @@
 apiVersion: v2
 type: application
-appVersion: "4.17.0"
+appVersion: "4.17.1"
 kubeVersion: ">=1.28.0-0"
 description: A Helm chart for Kubernetes
 name: ecp-broker

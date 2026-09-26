@@ -7,3 +7,5 @@
 /.github/scripts/__pycache__/
 /.github/pages/__pycache__/
 /node_modules/
+/Herstellercharts/
+/charts/*/files/__pycache__/

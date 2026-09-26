@@ -95,6 +95,30 @@ spec:
             - name: logs
               mountPath: /logs
             {{- end }}
+        {{- if dig "databaseWait" "enabled" false $instance }}
+        - name: wait-for-database
+          image: {{ include "ecp-endpoint.busybox" $ | quote }}
+          securityContext: {{ toYaml $mainSecurity | nindent 12 }}
+          command: ["/bin/sh", "-ec"]
+          env:
+            - name: DB_HOST
+              value: {{ $instance.databaseWait.host | quote }}
+            - name: DB_PORT
+              value: {{ $instance.databaseWait.port | quote }}
+            - name: DB_ATTEMPTS
+              value: {{ default 30 $instance.databaseWait.attempts | quote }}
+            - name: DB_INTERVAL
+              value: {{ default 2 $instance.databaseWait.intervalSeconds | quote }}
+          args:
+            - |
+              attempt=0
+              while [ "$attempt" -lt "$DB_ATTEMPTS" ]; do
+                nc -z -w 2 "$DB_HOST" "$DB_PORT" && exit 0
+                attempt=$((attempt + 1))
+                sleep "$DB_INTERVAL"
+              done
+              exit 1
+        {{- end }}
         {{- range $extra := $instance.initContainers }}
         {{- $extra = deepCopy $extra }}
         {{- $_ := set $extra "securityContext" $mainSecurity }}

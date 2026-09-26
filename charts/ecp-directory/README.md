@@ -1,6 +1,6 @@
 # ECP Component Directory - Helm Chart
 
-Standalone chart for ECP Directory 4.17.0, Helm 3, and Kubernetes >= 1.28.
+Standalone chart for ECP Directory 4.17.1, Helm 3, and Kubernetes >= 1.28.
 Public defaults: [values.yaml](values.yaml).
 
 Versioned packages instead of a local checkout:
@@ -24,6 +24,23 @@ Maintain complete files outside the repository according to the official ECP con
 and provide them before installation. Ports, database, TLS, users, and CA,
 registration, and authentication keystores must match the environment.
 Do not create complete private files or Secret manifests in this repository.
+
+For an airgapped cluster, mirror the application and BusyBox images to your
+internal registry. Set `instance[].image.name` to the full repository path of
+the mirrored `entsoe/ecp-directory` image in the complete instance values, and
+configure the shared images and pull credentials for this release:
+
+```yaml
+global:
+	imageBusybox:
+		name: artifactory.intern.example/docker/busybox
+		tag: '1.37.0'
+	imagePullSecrets:
+		- name: artifactory-pull
+```
+
+The pull Secret must exist in the release namespace. The chart does not mirror
+images, create registry credentials, or provision the external HA database.
 
 ## Public Values and Their Limits
 
@@ -72,6 +89,10 @@ Both access methods are disabled by default and can be used in parallel for migr
 One replica, HTTPS 8443, UID/GID/fsGroup 2000, data PVC 1Gi, logs PVC 256Mi.
 Startup and readiness are enabled, liveness is disabled. Interval 10s, timeout 2s,
 startup threshold 60. TCP checks neither the database nor TLS or application-level health.
+Set `databaseWait.enabled: true` with a database `host` and `port` on an instance
+to wait for TCP reachability before startup. Optional `attempts` (default 30)
+and `intervalSeconds` (default 2) bound the wait. This does not authenticate,
+execute SQL, or check the schema; keep credentials in the external Secret.
 JMX remains disabled by default.
 
 From the repository root, without cluster access:
@@ -90,7 +111,7 @@ instance. Service: `platform-ecp-directory-cd-svc`.
 Multiple replicas require `ecp-ha`, `springDatasourceDriverClassName`, and an
 external `ecpDBUrl` in `ecpDirectoryProperties` for validation.
 This configures neither the external database nor the contents of the Secret.
-There are no containers that wait for the database and no registration hooks.
+There is no database check by default and no registration hook.
 Keystores are initialized from the image onto the PVC; registration and
 certificate provisioning remain external.
 

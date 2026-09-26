@@ -3,6 +3,7 @@
 from copy import deepcopy
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+import importlib.util
 from pathlib import Path
 import re
 import runpy
@@ -11,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import xml.etree.ElementTree as ET
 
 import yaml
 
@@ -20,6 +22,104 @@ import validate_charts as runner
 
 
 class FixtureTests(unittest.TestCase):
+    def test_broker_prometheus_uses_secret_xml_copies(self):
+        for chart in BROKERS:
+            script = runner.ROOT / "charts" / chart / "files" / "metrics_transform.py"
+            spec = importlib.util.spec_from_file_location(f"{chart}_metrics", script)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            plugin_class = ("eu.entsoe.ecp.artemis.plugin.prometheus.EcpPrometheusMetricsPlugin"
+                            if chart == "ecp-broker" else
+                            "com.redhat.amq.broker.core.server.metrics.plugins.ArtemisPrometheusMetricsPlugin")
+            with tempfile.TemporaryDirectory() as temporary:
+                broker = Path(temporary) / "broker.xml"
+                bootstrap = Path(temporary) / "bootstrap.xml"
+                broker.write_text('<configuration xmlns="urn:broker"><core><name>private-value</name>'
+                                  '<broker-plugins/></core></configuration>')
+                bootstrap.write_text('<broker xmlns="urn:bootstrap"><web><binding uri="https://localhost"/>'
+                                     '</web></broker>')
+                for _ in range(2):
+                    module.configure_broker(broker, broker, plugin_class,
+                                            "/opt/ecp-broker/config/broker.properties" if chart == "ecp-broker" else None)
+                    module.configure_bootstrap(bootstrap, bootstrap)
+                core = next(element for element in ET.parse(broker).iter() if element.tag.endswith("core"))
+                plugins = [element for element in core.iter() if element.get("class-name") == plugin_class]
+                self.assertEqual(len(plugins), 1)
+                self.assertEqual(core[0].text, "private-value")
+                apps = [element for element in ET.parse(bootstrap).iter() if element.get("url") == "metrics"]
+                self.assertEqual(len(apps), 1)
+                self.assertEqual(apps[0].get("war"), "metrics.war")
+
+            for case_name in ("existing-secret", "ha-valid"):
+                for enabled in (False, True):
+                    with self.subTest(chart=chart, case=case_name, enabled=enabled):
+                        case = next(case for case in fixtures(runner.ROOT, chart) if case.name == case_name)
+                        case.values["instance"][0]["prometheusEnabled"] = enabled
+                        case.values["instance"][0]["image"]["name"] = f"artifactory.intern.example/docker/{chart}"
+                        case.values["global"]["imageBusybox"]["name"] = "artifactory.intern.example/docker/busybox"
+                        case.values["global"]["imagePullSecrets"] = [{"name": "artifactory-pull"}]
+                        case.values["global"]["imageMetricsPython"] = {
+                            "name": "artifactory.intern.example/docker/python", "tag": "3.12-alpine",
+                            "pullPolicy": "Never",
+                        }
+                        render = subprocess.run(["helm", "template", "review", str(runner.ROOT / "charts" / chart),
+                                                 "-f", "-"], input=yaml.safe_dump(case.values),
+                                                text=True, capture_output=True)
+                        self.assertEqual(render.returncode, 0, render.stderr)
+                        validate_manifest(render.stdout, case, {chart: case.values})
+                        docs = [doc for doc in yaml.safe_load_all(render.stdout) if isinstance(doc, dict)]
+                        pod = next(doc for doc in docs if doc["kind"] == "StatefulSet")["spec"]["template"]["spec"]
+                        config = next(doc for doc in docs if doc["kind"] == "ConfigMap")["data"]
+                        self.assertEqual(pod["imagePullSecrets"], [{"name": "artifactory-pull"}])
+                        self.assertTrue(all(container["image"].startswith("artifactory.intern.example/docker/")
+                                            for container in pod["initContainers"] + pod["containers"]))
+                        self.assertEqual("metrics_transform.py" in config, enabled)
+                        init = [item for item in pod["initContainers"] if item["name"] == "configure-prometheus-metrics"]
+                        self.assertEqual(len(init), int(enabled))
+                        main_files = {mount.get("subPath") for mount in pod["containers"][0]["volumeMounts"]}
+                        self.assertEqual("bootstrap.xml" in main_files, not enabled)
+                        self.assertEqual("broker.xml" in main_files, not enabled and case_name != "ha-valid")
+                        if enabled:
+                            self.assertEqual(config["metrics_transform.py"], script.read_text().rstrip("\n"))
+                            self.assertEqual(init[0]["image"], "artifactory.intern.example/docker/python:3.12-alpine")
+                            self.assertEqual(init[0]["imagePullPolicy"], "Never")
+                            self.assertEqual(plugin_class, init[0]["args"][4])
+                            self.assertEqual(init[0]["args"][0].endswith("/etc/broker.xml"), case_name == "ha-valid")
+                            if case_name == "ha-valid":
+                                names = [item["name"] for item in pod["initContainers"]]
+                                self.assertLess(names.index("artemis-ha-configuration-update"),
+                                                names.index("configure-prometheus-metrics"))
+                            self.assertNotIn("private-value", str(config))
+
+    def test_database_wait_is_optional_and_requires_a_valid_target(self):
+        for chart in ("ecp-endpoint", "ecp-directory"):
+            values = read_yaml(runner.ROOT / "charts" / chart / "values.yaml")
+            values["instance"][0]["existingSecret"] = SECRET
+            values["instance"][0]["databaseWait"] = {"enabled": True, "host": "db.example.internal", "port": 5432}
+            command = ["helm", "template", "review", str(runner.ROOT / "charts" / chart), "-f", "-"]
+            with self.subTest(chart=chart):
+                values["instance"][0]["databaseWait"] = {"enabled": False}
+                default = subprocess.run(command, input=yaml.safe_dump(values), text=True, capture_output=True)
+                self.assertEqual(default.returncode, 0, default.stderr)
+                default_state = next(doc for doc in yaml.safe_load_all(default.stdout) if isinstance(doc, dict) and doc.get("kind") == "StatefulSet")
+                self.assertNotIn("wait-for-database", [item["name"] for item in default_state["spec"]["template"]["spec"]["initContainers"]])
+                values["instance"][0]["databaseWait"] = {"enabled": True, "host": "db.example.internal", "port": 5432}
+                rendered = subprocess.run(command, input=yaml.safe_dump(values), text=True, capture_output=True)
+                self.assertEqual(rendered.returncode, 0, rendered.stderr)
+                state = next(doc for doc in yaml.safe_load_all(rendered.stdout) if isinstance(doc, dict) and doc.get("kind") == "StatefulSet")
+                pod = state["spec"]["template"]["spec"]
+                wait = [item for item in pod["initContainers"] if item["name"] == "wait-for-database"]
+                self.assertEqual(len(wait), 1)
+                self.assertFalse(wait[0].get("volumeMounts"))
+                self.assertEqual({item["name"]: item["value"] for item in wait[0]["env"]}["DB_HOST"], "db.example.internal")
+                self.assertIn("readinessProbe", pod["containers"][0])
+                validate_manifest(rendered.stdout, Case("database-wait", values), {chart: values})
+                for target in ({"enabled": True, "port": 5432}, {"enabled": True, "host": "db.example.internal", "port": 0},
+                               {"enabled": True, "host": "db;echo bad", "port": 5432}):
+                    values["instance"][0]["databaseWait"] = target
+                    rejected = subprocess.run(command, input=yaml.safe_dump(values), text=True, capture_output=True)
+                    self.assertNotEqual(rejected.returncode, 0)
+
     def test_shipped_probe_values_only_expose_enabled(self):
         expected = {probe: {"enabled": probe != "livenessProbe"} for probe in PROBES}
         sources = [runner.ROOT / "charts" / chart / "values.yaml" for chart in CHARTS]

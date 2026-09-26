@@ -1,6 +1,6 @@
 # ECCoSP Artemis - Helm Chart
 
-Standalone chart for the internal broker 4.17.0, Helm 3, and Kubernetes >= 1.28.
+Standalone chart for the internal broker 4.17.1, Helm 3, and Kubernetes >= 1.28.
 Public defaults: [values.yaml](values.yaml).
 
 Versioned packages instead of a local checkout:
@@ -27,8 +27,39 @@ Do not store Secret manifests or complete private file examples in the repositor
 `artemisUsers` contains only `login` for the public `amq` role mapping;
 this does not create the `endpoint` and `toolbox` accounts. The external
 user files and client configurations must match.
-Private `brokerXml` values, `artemisKeystoreLocation`, `artemisKeystorePassword`,
-or `prometheusEnabled` do not modify any external files. The named
+Private `brokerXml` values, `artemisKeystoreLocation`, and
+`artemisKeystorePassword` do not modify external files. Set
+`instance[].prometheusEnabled: true` to add
+`com.redhat.amq.broker.core.server.metrics.plugins.ArtemisPrometheusMetricsPlugin`
+to the effective broker XML and `metrics.war` to each web binding in
+`bootstrap.xml`. The external Secret remains unchanged: an unprivileged Python
+init container updates copies in the writable configuration volume, after HA
+configuration when applicable. An HTTP/HTTPS service and its `bootstrap.xml`
+Secret key are required. Existing matching entries are not duplicated. Verify
+the broker image contains the plugin and WAR before rollout and protect the
+metrics endpoint with appropriate web access controls.
+For airgapped clusters, mirror every required image into an internal Artifactory
+Docker repository and configure the full image paths in your deployment values:
+
+```yaml
+global:
+  imageBusybox:
+    name: artifactory.intern.example/docker/busybox
+    tag: '1.37.0'
+  imageMetricsPython:
+    name: artifactory.intern.example/docker/python
+    tag: '3.12-alpine'
+  imagePullSecrets:
+    - name: artifactory-pull
+```
+
+Set `instance[].image.name` to the mirrored `entsoe/eccosp-artemis` image's
+full Artifactory path in the complete instance values. The Python image is used
+only when `prometheusEnabled` is true and must provide `python3`. The pull
+Secret must already exist in the release namespace; the chart does not mirror
+images or manage registry credentials.
+
+The named
 `configuration` template renders only public configuration. Complete private files
 are not rendered at all, even internally; private legacy data sections and
 dummy values have been removed. The `omit` lists in `publicConfig` and the
@@ -37,7 +68,7 @@ not a validation of external Secret contents.
 
 ## Public Defaults
 
-- One replica, ClusterIP, UID/GID/fsGroup 2030; image tag `'4.17.0'`.
+- One replica, ClusterIP, UID/GID/fsGroup 2030; image tag `'4.17.1'`.
 - `env.resourcesJvm`: Heap in the public Artemis startup configuration.
 - Data/keystore PVC and journal PVC: 1Gi each. Logs use `emptyDir` by default,
   with a dedicated logs PVC when `keepLogsAfterRestart: true`.

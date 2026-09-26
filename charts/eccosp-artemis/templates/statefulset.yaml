@@ -4,6 +4,7 @@
 {{- if or (not (hasKey $instance "enabled")) $instance.enabled }}
 {{- $ha := gt (int (dig "replicaCount" 1 $instance)) 1 -}}
 {{- $service := $instance.service | default dict -}}
+{{- if and $instance.prometheusEnabled (not (or $service.http $service.https)) }}{{ fail "eccosp-artemis: prometheusEnabled requires an HTTP or HTTPS service and bootstrap.xml" }}{{- end -}}
 {{- $amqp := "amqps" -}}
 {{- $amqpPort := dig $amqp "port" 5672 $service -}}
 {{- $sc := mergeOverwrite (dict "runAsUser" 2030 "runAsGroup" 2030 "fsGroup" 2030 "fsGroupChangePolicy" "OnRootMismatch") (deepCopy ($instance.securityContext | default dict)) -}}
@@ -24,6 +25,10 @@
 {{- else -}}
 {{- $_ := set $files "broker.xml" "/opt/eccosp-artemis/etc/broker.xml" -}}
 {{- $secretKeys = append $secretKeys "broker.xml" -}}
+{{- end -}}
+{{- if $instance.prometheusEnabled -}}
+{{- $_ := unset $files "broker.xml" -}}
+{{- $_ := unset $files "bootstrap.xml" -}}
 {{- end -}}
 {{- $mounts := dict "data" "/opt/eccosp-artemis/etc" "journal" "/opt/eccosp-artemis/data" "logs" "/opt/eccosp-artemis/log" }}
 ---
@@ -120,6 +125,31 @@ spec:
             - name: config
               subPath: {{ $file }}
               mountPath: /tmp/{{ $file }}
+              readOnly: true
+            {{- end }}
+            - name: data
+              mountPath: /opt/eccosp-artemis/etc
+        {{- end }}
+        {{- if $instance.prometheusEnabled }}
+        - name: configure-prometheus-metrics
+          image: {{ include "eccosp-artemis.image" $.Values.global.imageMetricsPython | quote }}
+          imagePullPolicy: {{ default "IfNotPresent" $.Values.global.imageMetricsPython.pullPolicy }}
+          securityContext: {{ toYaml $mainSecurity | nindent 12 }}
+          command: ["python3", "/config/metrics_transform.py"]
+          args:
+            - {{ ternary "/opt/eccosp-artemis/etc/broker.xml" "/config/broker.xml" $ha | quote }}
+            - /config/bootstrap.xml
+            - /opt/eccosp-artemis/etc/broker.xml
+            - /opt/eccosp-artemis/etc/bootstrap.xml
+            - com.redhat.amq.broker.core.server.metrics.plugins.ArtemisPrometheusMetricsPlugin
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            {{- range $key := ternary (list "bootstrap.xml") (list "broker.xml" "bootstrap.xml") $ha }}
+            - name: config
+              subPath: {{ $key }}
+              mountPath: /tmp/{{ $key }}
               readOnly: true
             {{- end }}
             - name: data

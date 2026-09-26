@@ -24,7 +24,10 @@
 		{{- if not $image.digest -}}{{- $_ := required "image.tag or image.digest is required" $image.tag -}}{{- end -}}
 		{{- $replicas := dig "replicaCount" 1 $i -}}
 		{{- if not (regexMatch "^[0-9]+$" (toString $replicas)) -}}{{ fail "replicaCount must be a non-negative integer" }}{{- end -}}
-		{{- if (dig "databaseWait" "enabled" false $i) -}}{{ fail "databaseWait is unsupported; database initialization is managed by the application" }}{{- end -}}
+		{{- if (dig "databaseWait" "enabled" false $i) -}}
+			{{- $_ := required "databaseWait.host is required" (dig "databaseWait" "host" "" $i) -}}
+			{{- $_ := required "databaseWait.port is required" (dig "databaseWait" "port" 0 $i) -}}
+		{{- end -}}
 		{{- if gt (int $replicas) 1 -}}
 			{{- $p := $i.ecpProperties | default dict -}}
 			{{- if not (has "ecp-ha" (splitList "," (replace " " "" (default "" $p.springProfilesActive)))) -}}{{ fail "replicas > 1 require springProfilesActive including ecp-ha" }}{{- end -}}

@@ -1,6 +1,6 @@
 # ECP Endpoint - Helm Chart
 
-Standalone chart for ECP Endpoint 4.17.0, Helm 3, and Kubernetes >= 1.28.
+Standalone chart for ECP Endpoint 4.17.1, Helm 3, and Kubernetes >= 1.28.
 The canonical public configuration is in [values.yaml](values.yaml).
 Versioned packages instead of a local checkout:
 [Helm Repository and Quickstart](../../Dokumentation/Helm_Repository.md).
@@ -26,6 +26,23 @@ ECP configuration. Ports, database, TLS, users, keystores, and the connection to
 the internal broker must be configured correctly there. An existing Secret name alone
 is not sufficient for a functional startup. Helm checks neither existence nor content.
 Do not store Secret files or private configuration examples in this repository.
+
+For an airgapped cluster, mirror the application and BusyBox images to your
+internal registry. Set `instance[].image.name` to the full repository path of
+the mirrored `entsoe/ecp-endpoint` image in the complete instance values, and
+configure the shared images and pull credentials for this release:
+
+```yaml
+global:
+  imageBusybox:
+    name: artifactory.intern.example/docker/busybox
+    tag: '1.37.0'
+  imagePullSecrets:
+    - name: artifactory-pull
+```
+
+The pull Secret must exist in the release namespace. The chart does not mirror
+images, create registry credentials, or provision the external HA database.
 
 ## What Values Actually Control
 
@@ -74,6 +91,10 @@ One replica, HTTPS 8443, UID/GID/fsGroup 2000, data PVC 1Gi, logs PVC 256Mi.
 JMX is not enabled, including in the EP2 example. Startup and readiness are
 enabled, liveness is disabled; interval 10s, timeout 2s, startup threshold 60.
 TCP probes check only transport reachability, not the TLS handshake, database, or ECP health.
+Set `databaseWait.enabled: true` with a database `host` and `port` on an instance
+to wait for TCP reachability before startup. Optional `attempts` (default 30)
+and `intervalSeconds` (default 2) bound the wait. This does not authenticate,
+execute SQL, or check the schema; keep credentials in the external Secret.
 
 From the repository root, without cluster access:
 
@@ -92,7 +113,7 @@ The Service in this example is named `platform-ecp-endpoint-ep1-svc`.
 More than one replica requires `ecp-ha`, a supported external JDBC driver,
 and `ecpDBUrl` in `ecpProperties` for helper validation. The same database
 configuration, including credentials, must be set externally; there is
-no container that waits for the database. A second standalone Endpoint is not an HA replica.
+no database check by default. A second standalone Endpoint is not an HA replica.
 
 Secret change -> increment `secretRevision` and plan a Pod restart.
 Public ConfigMap checksums do not track external Secret contents.

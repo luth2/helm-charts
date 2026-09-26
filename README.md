@@ -35,7 +35,7 @@ The key features of ECCo SP:
 
 ## Kubernetes deployment with Helm
 
-The 5.x Helm charts use application images 4.17.0 by default and require Helm 3
+The 5.x Helm charts use application images 4.17.1 by default and require Helm 3
 and Kubernetes >= 1.28. There are exactly four standalone charts:
 [charts/ecp-endpoint/README.md](charts/ecp-endpoint/README.md),
 [charts/ecp-directory/README.md](charts/ecp-directory/README.md),
