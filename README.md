@@ -63,11 +63,12 @@ HA requires coordinated external configuration and suitable storage. Root
 init containers prevent a blanket claim of Restricted PSA compliance despite
 the non-root application, and may fail with NFS `root_squash`.
 
-CI validates the four standalone charts without a cluster, including synthetic
-fixtures, linting, rendering and packages. For Gateway resources, the pinned
-Gateway API CRD sources v1.4.1 are downloaded over verified HTTPS, checked using
-SHA-256 and converted into strict schemas. This does not execute CEL rules
-and does not replace runtime or cluster tests.
+CI validates the four standalone charts with synthetic fixtures, linting, rendering
+and package checks, then uses server-side dry-runs against temporary kind clusters
+for every Kubernetes minor from 1.34 through the latest available in stable kind
+releases. For Gateway resources, the pinned Gateway API CRD sources
+v1.4.1 are downloaded over verified HTTPS and checked using SHA-256 before use.
+This does not replace testing on the target cluster or runtime tests.
 
 ## ECP - Energy Communication Platform
 

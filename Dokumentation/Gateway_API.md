@@ -135,9 +135,10 @@ Ingress scenarios: HTTP/HTTPS, CA modes, namespace/listener, custom paths,
 long names, multiple/disabled instances and invalid configurations.
 Kubeconform receives schemas derived from the official v1.4.1 CRDs;
 downloads are verified against fixed SHA256 checksums and are not loaded as executable code.
-Missing schemas are not ignored. Validation is cluster-free: Kubernetes
-CEL rules, controller support, certificates and runtime routing behavior are therefore
-not verified and must undergo acceptance testing in the target cluster.
+Missing schemas are not ignored. The schema checks are cluster-free; an additional
+kind job installs the verified CRDs and performs API server dry-runs for HTTP and
+HTTPS Gateway fixtures. This still does not verify controller support, certificates,
+runtime routing, or the admission policies of the target cluster.
 
 Do not overwrite previously published chart versions. Choose a new chart version
 before publishing this new feature;

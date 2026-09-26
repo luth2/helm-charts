@@ -522,8 +522,14 @@ not merely a change to `replicaCount`.
 ## CI and Limits of Validation
 
 The [../.github/workflows/lint.yml](../.github/workflows/lint.yml) workflow checks
-all four standalone charts without a cluster: fixture/assertion tests,
-linting, rendering, manifest validation, and source and package tests.
+all four standalone charts: fixture/assertion tests, linting, rendering, manifest
+validation, and source and package tests. A subsequent kind matrix checks the
+validated packages against every Kubernetes minor from 1.34 through the latest
+with a pre-built image in official stable kind releases. Images are selected
+from their published SHA-256 digests; missing minor versions fail CI
+instead of silently reducing coverage. Each cluster performs server-side dry-runs
+for the default, Ingress, and Gateway HTTP/HTTPS fixtures. It installs only the
+verified Gateway API v1.4.1 CRDs, not a Gateway controller or application Pods.
 Uploads contain synthetic test artifacts and validated packages, not real
 Secrets. Do not introduce production configurations into fixtures, rendered
 output, or CI uploads.
@@ -531,9 +537,10 @@ output, or CI uploads.
 For rendered `HTTPRoute` and `BackendTLSPolicy` resources, the required
 Gateway API CRD sources for the pinned version **v1.4.1** are downloaded over
 verified HTTPS and checked against hard-coded SHA-256 checksums before parsing.
-Strict schemas generated from these sources are used for cluster-free manifest
-validation. Kubernetes CEL rules are not executed; this is neither a
-controller/runtime test nor a test against a cluster.
+Strict schemas generated from these sources are used for the cluster-free
+manifest checks; those checks do not execute Kubernetes CEL rules. The separate
+kind job runs API server validation with the CRDs installed, but does not test
+controller behavior, external Secrets, storage, or application readiness.
 
 The [../.github/workflows/Release Charts.yml](../.github/workflows/Release%20Charts.yml)
 workflow publishes the four validated packages only after successful validation.
@@ -556,6 +563,6 @@ This requires permission for GitHub Actions to write repository contents and
 for the release bot to push the version commits to main (including any branch
 protection rules). Do not create or retag chart releases by hand alongside this
 workflow. `appVersion` and application image tags remain independent.
-CI does not prove image availability, cluster admission, storage suitability,
-registration, TLS/database functionality, or HA resilience. These checks remain
-the responsibility of subsequent testing and operational acceptance.
+CI does not prove image availability, admission policies in the target cluster,
+storage suitability, registration, TLS/database functionality, or HA resilience.
+These checks remain the responsibility of subsequent testing and operational acceptance.
