@@ -4,7 +4,7 @@ appVersion: "4.17.0"
 kubeVersion: ">=1.28.0-0"
 description: A Helm chart for Kubernetes
 name: ecp-endpoint
-version: 5.0.1
+version: 5.0.2
 maintainers:
 - name: "luth2"
   email: "ecp-maintenance@amprion.net"
