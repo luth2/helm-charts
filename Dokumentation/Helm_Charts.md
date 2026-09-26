@@ -537,8 +537,25 @@ controller/runtime test nor a test against a cluster.
 
 The [../.github/workflows/Release Charts.yml](../.github/workflows/Release%20Charts.yml)
 workflow publishes the four validated packages only after successful validation.
-The current chart versions remain 5.0.0; a shared dependency version is not
-required for the independent charts.
+Chart versions are independently determined from conventional commits that change
+their respective `charts/<name>/` directory. `feat:` increments the minor version,
+`fix:` and `perf:` increment the patch version, and a `!` or `BREAKING CHANGE:`
+footer increments the major version. Other commits do not trigger a chart release.
+For example, `fix(ecp-endpoint): correct service selector` releases only the
+Endpoint chart when its files change. A single commit changing multiple charts
+may release each changed chart independently. Use a new `feat:`/`fix:` commit for
+a correction to an already published chart version: released tags and packages
+are immutable.
+
+On main, semantic-release validates the versioned package, commits the updated
+`Chart.yaml`, creates the chart-specific tag `<chart>-<version>` and publishes
+the tested `.tgz` as a GitHub Release asset. Chart-releaser then updates the
+Helm index from these releases, after the same validated packages have been
+copied to `gh-pages`; Pages deploys the refreshed index and portal.
+This requires permission for GitHub Actions to write repository contents and
+for the release bot to push the version commits to main (including any branch
+protection rules). Do not create or retag chart releases by hand alongside this
+workflow. `appVersion` and application image tags remain independent.
 CI does not prove image availability, cluster admission, storage suitability,
 registration, TLS/database functionality, or HA resilience. These checks remain
 the responsibility of subsequent testing and operational acceptance.

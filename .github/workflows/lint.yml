@@ -7,11 +7,22 @@ on:
     paths:
     - 'charts/**'
     - '.github/**'
+    - 'package.json'
 
 permissions:
   contents: read
 
 jobs:
+  release-rules:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v7.0.1
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Test chart release rules
+      run: npm run test:release
+
   standalone:
     runs-on: ubuntu-24.04
     strategy:

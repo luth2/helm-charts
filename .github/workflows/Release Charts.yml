@@ -7,6 +7,7 @@ on:
     paths:
     - 'charts/**'
     - '.github/**'
+    - 'package.json'
 
 permissions:
   contents: read
@@ -38,51 +39,94 @@ jobs:
         git config user.name "$RELEASE_ACTOR"
         git config user.email "$RELEASE_ACTOR@users.noreply.github.com"
 
-    - name: Install Helm 3.19.0 (verified download)
-      run: bash .github/scripts/setup-tools.sh helm-only
-
-    - name: Download packages from this run's successful validation
-      uses: actions/download-artifact@v8
+    - uses: actions/setup-python@v7.0.0
       with:
-        pattern: ci-charts-*
-        path: .ci-artifacts/release
-
-    - name: Stage only the four validated packages
+        python-version: '3.12'
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Install pinned validation tools and release dependencies
+      run: |
+        bash .github/scripts/setup-tools.sh
+        python -m pip install --disable-pip-version-check PyYAML==6.0.2
+        npm install --ignore-scripts --no-audit --no-fund --no-package-lock
+    - name: Test release rules
+      run: npm run test:release
+    - name: Version, validate, tag and publish each changed chart
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GIT_AUTHOR_NAME: github-actions[bot]
+        GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        GIT_COMMITTER_NAME: github-actions[bot]
+        GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+      shell: bash
+      run: |
+        set -euo pipefail
+        for chart in ecp-endpoint ecp-directory ecp-broker eccosp-artemis; do
+          CHART="$chart" npx --no-install semantic-release --extends ./.github/release.config.cjs
+        done
+    - name: Stage only newly released packages
+      id: stage
       shell: bash
       run: |
         set -euo pipefail
         shopt -s nullglob
         mkdir -p .cr-release-packages
         for chart in ecp-endpoint ecp-directory ecp-broker eccosp-artemis; do
-          packages=(.ci-artifacts/release/ci-charts-"${chart}"/"${chart}"-*.tgz)
-          if (( ${#packages[@]} != 1 )); then
-            echo "Expected exactly one validated package for ${chart}" >&2
+          packages=(.ci-artifacts/"${chart}"/publish/"${chart}"-*.tgz)
+          if (( ${#packages[@]} > 1 )); then
+            echo "Expected at most one package for ${chart}" >&2
             exit 1
           fi
-          cp -- "${packages[0]}" .cr-release-packages/
+          if (( ${#packages[@]} == 1 )); then
+            cp -- "${packages[0]}" .cr-release-packages/
+          fi
         done
         staged=(.cr-release-packages/*.tgz)
-        test "${#staged[@]}" -eq 4
+        if (( ${#staged[@]} > 0 )); then
+          echo 'has_packages=true' >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Publish validated packages to the Helm Pages branch
+      if: steps.stage.outputs.has_packages == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        git fetch origin gh-pages
+        worktree="$(mktemp -d "$RUNNER_TEMP/chart-pages.XXXXXX")"
+        git worktree add --detach "$worktree" origin/gh-pages
+        trap 'git worktree remove "$worktree"' EXIT
+        for package in .cr-release-packages/*.tgz; do
+          name="$(basename "$package")"
+          if [[ -e "$worktree/$name" ]]; then
+            cmp "$package" "$worktree/$name"
+          else
+            cp -- "$package" "$worktree/$name"
+          fi
+          git -C "$worktree" add -- "$name"
+        done
+        if ! git -C "$worktree" diff --cached --quiet; then
+          git -C "$worktree" commit -m 'Publish validated Helm packages'
+          git -C "$worktree" push origin HEAD:gh-pages
+        fi
+        git fetch origin gh-pages
 
     - name: Install chart-releaser
+      if: steps.stage.outputs.has_packages == 'true'
       uses: helm/chart-releaser-action@v1.7.0
       with:
         version: v1.7.0
         install_only: true
 
     - name: Publish validated packages and index
+      if: steps.stage.outputs.has_packages == 'true'
       shell: bash
       env:
         CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Chart metadata .Version, never .AppVersion. Shared by upload and index.
         CR_RELEASE_NAME_TEMPLATE: '{{ .Name }}-{{ .Version }}'
-      # v1.7.0 cr.sh main() only defines latest_tag in the packaging branch,
-      # then unconditionally expands it with nounset. Use CLI, not an env shim:
-      # https://github.com/helm/chart-releaser-action/blob/v1.7.0/cr.sh
       run: |
         set -euo pipefail
         owner="${GITHUB_REPOSITORY%%/*}"
         repo="${GITHUB_REPOSITORY#*/}"
         mkdir -p .cr-index
-        cr upload -o "$owner" -r "$repo" -c "$GITHUB_SHA" --packages-with-index --push --skip-existing
         cr index -o "$owner" -r "$repo" --push --packages-with-index --index-path .
