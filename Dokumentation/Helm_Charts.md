@@ -22,8 +22,8 @@ SHA-256; when a digest is set, it takes precedence over the tag.
 ### Versioning and Names
 
 - `Chart.yaml: version` versions the Helm chart: package `ecp-broker-5.0.0.tgz`
-    and GitHub release/tag `ecp-broker-5.0.0`. When changing the chart, increment
-    this version for a new publication.
+   and GitHub release/tag `ecp-broker-5.0.0`. The release workflow increments
+   this version automatically when a change to that chart reaches main.
 - `Chart.yaml: appVersion` describes the application. It can change independently
     of the chart version and determines neither package names nor dependency versions.
 - `instance[].image.tag` or `image.digest` determines the actual container image;
@@ -547,15 +547,14 @@ not test controller behavior, external Secrets, storage, or application readines
 The [../.github/workflows/Release Charts.yml](../.github/workflows/Release%20Charts.yml)
 workflow publishes the four validated packages only after the independent lint,
 Kubernetes, and release-rule checks succeed.
-Chart versions are independently determined from conventional commits that change
-their respective `charts/<name>/` directory. `feat:` increments the minor version,
-`fix:` and `perf:` increment the patch version, and a `!` or `BREAKING CHANGE:`
-footer increments the major version. Other commits do not trigger a chart release.
-For example, `fix(ecp-endpoint): correct service selector` releases only the
-Endpoint chart when its files change. A single commit changing multiple charts
-may release each changed chart independently. Use a new `feat:`/`fix:` commit for
-a correction to an already published chart version: released tags and packages
-are immutable.
+Chart versions are independently determined from commits that change their
+respective `charts/<name>/` directory. Any chart change, including its README,
+increments at least the patch version without requiring a commit prefix. `feat:`
+increments the minor version, while a `!` or `BREAKING CHANGE:` footer increments
+the major version. Commits changing only CI or documentation outside a chart do
+not trigger a chart release. A single commit changing multiple charts may release
+each changed chart independently. For a correction to an already published chart
+version, commit a new change to that chart: released tags and packages are immutable.
 
 On main, semantic-release validates the versioned package, commits the updated
 `Chart.yaml`, creates the chart-specific tag `<chart>-<version>` and publishes

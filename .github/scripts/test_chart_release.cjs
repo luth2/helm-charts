@@ -6,7 +6,7 @@ const { join } = require('node:path');
 const { test } = require('node:test');
 const plugin = require('./chart_release.cjs');
 
-test('only conventional changes to the selected chart create a release', async () => {
+test('all changes to the selected chart create a release', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'chart-release-'));
   const previous = process.cwd();
   const commits = [];
@@ -24,6 +24,8 @@ test('only conventional changes to the selected chart create a release', async (
       ['ecp-endpoint', 'feat!: endpoint contract changed'],
       ['ecp-endpoint', 'docs: endpoint guide'],
       ['ecp-directory', 'refactor!: directory contract changed'],
+      ['eccosp-artemis', 'update chart documentation'],
+      ['ecp-directory', 'adjust directory API\n\nBREAKING CHANGE: old API removed'],
     ]) {
       const chartDirectory = join(directory, 'charts', chart);
       mkdirSync(chartDirectory, { recursive: true });
@@ -36,11 +38,15 @@ test('only conventional changes to the selected chart create a release', async (
     assert.equal(await plugin.analyzeCommits({ chart: 'ecp-endpoint' }, { commits, logger }), 'major');
     assert.equal(await plugin.analyzeCommits({ chart: 'ecp-broker' }, { commits, logger }), 'minor');
     assert.equal(await plugin.analyzeCommits({ chart: 'ecp-directory' }, { commits, logger }), 'major');
-    assert.equal(await plugin.analyzeCommits({ chart: 'eccosp-artemis' }, { commits, logger }), null);
+    assert.equal(await plugin.analyzeCommits({ chart: 'eccosp-artemis' }, { commits, logger }), 'patch');
+    assert.equal(await plugin.analyzeCommits({ chart: 'ecp-endpoint' }, { commits: [commits[3]], logger }), 'patch');
+    assert.equal(await plugin.analyzeCommits({ chart: 'ecp-directory' }, { commits: [commits[6]], logger }), 'major');
+    assert.equal(await plugin.analyzeCommits({ chart: 'ecp-endpoint' }, { commits: [commits[0]], logger }), null);
     const notes = await plugin.generateNotes({ chart: 'ecp-endpoint' },
       { commits, nextRelease: { version: '6.0.0' } });
     assert.match(notes, /endpoint correction/);
-    assert.doesNotMatch(notes, /broker feature|endpoint guide/);
+    assert.match(notes, /endpoint guide/);
+    assert.doesNotMatch(notes, /broker feature|update chart documentation/);
   } finally {
     process.chdir(previous);
     rmSync(directory, { recursive: true, force: true });

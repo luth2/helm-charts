@@ -12,10 +12,11 @@ function chartCommits(chart, commits) {
 function releaseType(commit) {
   const subject = commit.message.split('\n')[0];
   const match = /^([a-z]+)(?:\([^)]+\))?(!)?:\s+(.+)/.exec(subject);
-  if (!match) return null;
-  if (match[2] || /(?:^|\n)BREAKING CHANGE:\s+/m.test(commit.message)) return 'major';
+  if (/(?:^|\n)BREAKING CHANGE:\s+/m.test(commit.message)) return 'major';
+  if (!match) return 'patch';
+  if (match[2]) return 'major';
   if (match[1] === 'feat') return 'minor';
-  return ['fix', 'perf'].includes(match[1]) ? 'patch' : null;
+  return 'patch';
 }
 
 exports.analyzeCommits = async ({ chart }, { commits, logger }) => {
@@ -28,7 +29,7 @@ exports.analyzeCommits = async ({ chart }, { commits, logger }) => {
 };
 
 exports.generateNotes = async ({ chart }, { commits, nextRelease }) => {
-  const relevant = chartCommits(chart, commits).filter(releaseType);
+  const relevant = chartCommits(chart, commits);
   return [`## ${chart} ${nextRelease.version}`, '', ...relevant.map((commit) =>
     `- ${commit.message.split('\n')[0]} (${commit.hash.slice(0, 7)})`)].join('\n');
 };
