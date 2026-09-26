@@ -20,8 +20,14 @@ jobs:
   validation:
     uses: ./.github/workflows/lint.yml
 
+  kubernetes-validation:
+    uses: ./.github/workflows/kubernetes.yml
+
+  release-rules:
+    uses: ./.github/workflows/release-rules.yml
+
   release:
-    needs: validation
+    needs: [validation, kubernetes-validation, release-rules]
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write

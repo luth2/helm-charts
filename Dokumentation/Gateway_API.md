@@ -135,8 +135,9 @@ Ingress scenarios: HTTP/HTTPS, CA modes, namespace/listener, custom paths,
 long names, multiple/disabled instances and invalid configurations.
 Kubeconform receives schemas derived from the official v1.4.1 CRDs;
 downloads are verified against fixed SHA256 checksums and are not loaded as executable code.
-Missing schemas are not ignored. The schema checks are cluster-free; an additional
-kind job installs the verified CRDs and performs API server dry-runs for HTTP and
+Missing schemas are not ignored. The schema checks are cluster-free; the independent
+[Kubernetes validation workflow](../.github/workflows/kubernetes.yml) installs
+the verified CRDs and performs API server dry-runs for HTTP and
 HTTPS Gateway fixtures. This still does not verify controller support, certificates,
 runtime routing, or the admission policies of the target cluster.
 

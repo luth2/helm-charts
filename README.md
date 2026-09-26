@@ -63,8 +63,8 @@ HA requires coordinated external configuration and suitable storage. Root
 init containers prevent a blanket claim of Restricted PSA compliance despite
 the non-root application, and may fail with NFS `root_squash`.
 
-CI validates the four standalone charts with synthetic fixtures, linting, rendering
-and package checks, then uses server-side dry-runs against temporary kind clusters
+Separate CI workflows validate the four standalone charts with synthetic fixtures,
+linting, rendering and package checks, and run server-side dry-runs in temporary kind clusters
 for every Kubernetes minor from 1.34 through the latest available in stable kind
 releases. For Gateway resources, the pinned Gateway API CRD sources
 v1.4.1 are downloaded over verified HTTPS and checked using SHA-256 before use.

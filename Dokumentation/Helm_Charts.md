@@ -523,9 +523,11 @@ not merely a change to `replicaCount`.
 
 The [../.github/workflows/lint.yml](../.github/workflows/lint.yml) workflow checks
 all four standalone charts: fixture/assertion tests, linting, rendering, manifest
-validation, and source and package tests. A subsequent kind matrix checks the
-validated packages against every Kubernetes minor from 1.34 through the latest
-with a pre-built image in official stable kind releases. Images are selected
+validation, and source and package tests. The independent
+[Kubernetes validation workflow](../.github/workflows/kubernetes.yml) packages
+the charts with synthetic fixtures and checks them against every Kubernetes minor
+from 1.34 through the latest with a pre-built image in official stable kind releases.
+Images are selected
 from their published SHA-256 digests; missing minor versions fail CI
 instead of silently reducing coverage. Each cluster performs server-side dry-runs
 for the default, Ingress, and Gateway HTTP/HTTPS fixtures. It installs only the
@@ -539,11 +541,12 @@ Gateway API CRD sources for the pinned version **v1.4.1** are downloaded over
 verified HTTPS and checked against hard-coded SHA-256 checksums before parsing.
 Strict schemas generated from these sources are used for the cluster-free
 manifest checks; those checks do not execute Kubernetes CEL rules. The separate
-kind job runs API server validation with the CRDs installed, but does not test
-controller behavior, external Secrets, storage, or application readiness.
+Kubernetes workflow runs API server validation with the CRDs installed, but does
+not test controller behavior, external Secrets, storage, or application readiness.
 
 The [../.github/workflows/Release Charts.yml](../.github/workflows/Release%20Charts.yml)
-workflow publishes the four validated packages only after successful validation.
+workflow publishes the four validated packages only after the independent lint,
+Kubernetes, and release-rule checks succeed.
 Chart versions are independently determined from conventional commits that change
 their respective `charts/<name>/` directory. `feat:` increments the minor version,
 `fix:` and `perf:` increment the patch version, and a `!` or `BREAKING CHANGE:`

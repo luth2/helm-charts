@@ -22,7 +22,7 @@ exports.analyzeCommits = async ({ chart }, { commits, logger }) => {
   const order = { patch: 1, minor: 2, major: 3 };
   const relevant = chartCommits(chart, commits);
   const type = relevant.map(releaseType).reduce((highest, current) =>
-    order[current] > order[highest] ? current : highest, null);
+    order[current] > (order[highest] || 0) ? current : highest, null);
   logger.log('%s: %d changed commits; release: %s', chart, relevant.length, type || 'none');
   return type;
 };
