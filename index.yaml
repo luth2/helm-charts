@@ -57,6 +57,22 @@ entries:
     version: 4.16.0
   eccosp-artemis:
   - apiVersion: v2
+    appVersion: 4.17.1
+    created: "2026-09-26T12:34:55.09162378Z"
+    description: A Helm chart for Kubernetes
+    digest: 6aa3e435a53288522dbd994cbe5c0b9d28f649bc6d28292b7d69d197356b2f9c
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: eccosp-artemis
+    type: application
+    urls:
+    - eccosp-artemis-5.1.0.tgz
+    version: 5.1.0
+  - apiVersion: v2
     appVersion: 4.17.0
     created: "2026-09-26T09:40:40.202591038Z"
     description: A Helm chart for Kubernetes
@@ -123,6 +139,22 @@ entries:
     - eccosp-artemis-4.16.0.tgz
     version: 4.16.0
   ecp-broker:
+  - apiVersion: v2
+    appVersion: 4.17.1
+    created: "2026-09-26T12:34:55.325974782Z"
+    description: A Helm chart for Kubernetes
+    digest: cb1078f2e8aeba81ff24e7f37e3dc8286fe6ddb1b67a38b32ce5fa12a13c8a57
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: ecp-broker
+    type: application
+    urls:
+    - ecp-broker-5.1.0.tgz
+    version: 5.1.0
   - apiVersion: v2
     appVersion: 4.17.0
     created: "2026-09-26T09:40:40.373765052Z"
@@ -191,6 +223,22 @@ entries:
     version: 4.16.0
   ecp-directory:
   - apiVersion: v2
+    appVersion: 4.17.1
+    created: "2026-09-26T12:34:55.527507899Z"
+    description: A Helm chart for Kubernetes
+    digest: a675d8601835cdf30f201746d06d3471af1f6a2c1f26902618fb554000a966b0
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: ecp-directory
+    type: application
+    urls:
+    - ecp-directory-5.1.0.tgz
+    version: 5.1.0
+  - apiVersion: v2
     appVersion: 4.17.0
     created: "2026-09-26T09:40:40.575767755Z"
     description: A Helm chart for Kubernetes
@@ -258,6 +306,22 @@ entries:
     version: 4.16.0
   ecp-endpoint:
   - apiVersion: v2
+    appVersion: 4.17.1
+    created: "2026-09-26T12:34:55.734303563Z"
+    description: A Helm chart for Kubernetes
+    digest: 6d7afd7b234315394b4193517b7ad34d661b74a9ea25e8c4ea1b42eb47b6991b
+    icon: https://www.entsoe.eu/assets/graphics/uploads/thumbnail_0a1abssgsdcolbaj.png
+    kubeVersion: '>=1.28.0-0'
+    maintainers:
+    - email: ecp-maintenance@amprion.net
+      name: luth2
+      url: https://www.amprion.net/
+    name: ecp-endpoint
+    type: application
+    urls:
+    - ecp-endpoint-5.1.0.tgz
+    version: 5.1.0
+  - apiVersion: v2
     appVersion: 4.17.0
     created: "2026-09-26T09:40:40.727572281Z"
     description: A Helm chart for Kubernetes
@@ -323,4 +387,4 @@ entries:
     urls:
     - ecp-endpoint-4.16.0.tgz
     version: 4.16.0
-generated: "2026-09-26T09:40:40.727636882Z"
+generated: "2026-09-26T12:34:55.734425031Z"
