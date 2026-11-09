@@ -119,7 +119,7 @@ jobs:
 
     - name: Install chart-releaser
       if: steps.stage.outputs.has_packages == 'true'
-      uses: helm/chart-releaser-action@v1.7.0
+      uses: helm/chart-releaser-action@v1.9.0
       with:
         version: v1.7.0
         install_only: true
